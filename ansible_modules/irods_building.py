@@ -75,6 +75,7 @@ class GenericStrategy(object):
     def prepare_git_repository(self):
         self.module.run_command('git clone --recursive {0} {1}'.format(self.git_repository, self.local_irods_git_dir), check_rc=True)
         self.module.run_command('git checkout {0}'.format(self.git_commitish), cwd=self.local_irods_git_dir, check_rc=True)
+        self.module.run_command('git submodule update --init --recursive', cwd=self.local_irods_git_dir, check_rc=True)
 
     def build_irods_packages(self):
         os.makedirs(os.path.join(self.local_irods_git_dir, 'build'))
