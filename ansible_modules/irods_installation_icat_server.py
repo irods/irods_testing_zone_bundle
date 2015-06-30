@@ -3,6 +3,7 @@
 import abc
 import json
 import os
+import tempfile
 import time
 
 
@@ -180,10 +181,14 @@ class RedHatStrategy(GenericStrategy):
             self.module.run_command(['sudo', 'service', 'mysqld', 'restart'], check_rc=True)
             self.install_mysql_pcre(['pcre-devel', 'gcc', 'make', 'automake', 'mysql-devel', 'autoconf', 'git'], 'mysqld')
         elif self.icat_database_type == 'oracle':
-            self.module.run_command('sudo touch /etc/profile.d/oracle.sh', check_rc=True)
-            self.module.run_command(['sudo', 'su', '-c', "echo 'export LD_LIBRARY_PATH=/usr/lib/oracle/11.2/client64/lib:$LD_LIBRARY_PATH' >> /etc/profile.d/oracle.sh"], check_rc=True)
-            self.module.run_command(['sudo', 'su', '-c', "echo 'export ORACLE_HOME=/usr/lib/oracle/11.2/client64' >> /etc/profile.d/oracle.sh"], check_rc=True)
-            self.module.run_command(['sudo', 'su', '-c', "echo 'export PATH=$ORACLE_HOME/bin:$PATH' >> /etc/profile.d/oracle.sh"], check_rc=True)
+            with tempfile.NamedTemporaryFile() as f:
+                f.write('''
+export LD_LIBRARY_PATH=/usr/lib/oracle/11.2/client64/lib:$LD_LIBRARY_PATH
+export ORACLE_HOME=/usr/lib/oracle/11.2/client64
+export PATH=$ORACLE_HOME/bin:$PATH
+''')
+                f.flush()
+                self.module.run_command(['sudo', 'su', '-c', "cat '{0}' >> /etc/profile.d/oracle.sh".format(f.name)], check_rc=True)
             self.module.run_command(['sudo', 'su', '-c', "echo 'ORACLE_HOME=/usr/lib/oracle/11.2/client64' >> /etc/environment"], check_rc=True)
             self.module.run_command('sudo mkdir -p /usr/lib/oracle/11.2/client64/network/admin', check_rc=True)
             tns_contents = '''
