@@ -49,6 +49,7 @@ class GenericStrategy(object):
         self.output_root_directory = module.params['output_root_directory']
         self.git_repository = module.params['git_repository']
         self.git_commitish = module.params['git_commitish']
+        self.debug_build = module.params['debug_build']
         self.local_irods_git_dir = os.path.expanduser('~/irods')
 
     @abc.abstractproperty
@@ -79,9 +80,10 @@ class GenericStrategy(object):
 
     def build_irods_packages(self):
         os.makedirs(os.path.join(self.local_irods_git_dir, 'build'))
-        self.module.run_command('sudo ./packaging/build.sh -r icat postgres > ./build/build_output_icat_postgres.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
-        self.module.run_command('sudo ./packaging/build.sh -r resource postgres > ./build/build_output_resource.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
-        self.module.run_command('sudo ./packaging/build.sh -r icat mysql > ./build/build_output_icat_mysql.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+        build_flags = '' if self.debug_build else '-r'
+        self.module.run_command('sudo ./packaging/build.sh {0} icat postgres > ./build/build_output_icat_postgres.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('sudo ./packaging/build.sh {0} resource postgres > ./build/build_output_resource.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('sudo ./packaging/build.sh {0} icat mysql > ./build/build_output_icat_mysql.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
     def copy_build_output(self):
         shutil.copytree(os.path.join(self.local_irods_git_dir, 'build'), self.output_directory)
@@ -151,6 +153,7 @@ def main():
             output_root_directory=dict(type='str', required=True),
             git_repository=dict(type='str', required=True),
             git_commitish=dict(type='str', required=True),
+            debug_build=dict(type='bool', required=True),
         ),
         supports_check_mode=False,
     )
