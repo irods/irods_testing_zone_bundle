@@ -81,7 +81,7 @@ class GenericStrategy(object):
 
     @property
     def testing_dependencies(self):
-        return []
+        return ['bonnie++', 'fuse', 'git']
 
     def install_icat(self):
         icat_package_basename = filter(lambda x:'irods-icat' in x, os.listdir(self.irods_packages_directory))[0]
@@ -207,6 +207,7 @@ ICAT =
 
     def post_install_configuration(self):
         self.enable_pam()
+        self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
 
     def enable_pam(self):
         subprocess.check_call('''sudo sh -c "echo 'auth        sufficient    pam_unix.so' > /etc/pam.d/irods"''', shell=True)
@@ -306,4 +307,5 @@ def main():
 
 
 from ansible.module_utils.basic import *
+from ansible.module_utils.ben import *
 main()

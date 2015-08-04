@@ -91,7 +91,7 @@ class GenericStrategy(object):
 class RedHatStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON']
+        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON']
 
     def install_building_dependencies(self):
         super(RedHatStrategy, self).install_building_dependencies()
@@ -126,7 +126,7 @@ class DebianStrategy(GenericStrategy):
 class SuseStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel']
+        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel']
 
     def install_packages(self, packages):
         install_command = 'sudo zypper --non-interactive install {0}'.format(' '.join(packages))

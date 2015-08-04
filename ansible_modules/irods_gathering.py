@@ -23,7 +23,8 @@ def gather(output_root_directory):
     source_and_predicates = [('/var/lib/irods/iRODS/server/log', all_files),
                              ('/tmp/irods', all_files),
                              ('/var/lib/irods/tests/pydevtest/test-reports', all_files),
-                             ('/var/lib/irods/iRODS/server/test/bin', log_files)]
+                             ('/var/lib/irods/iRODS/server/test/bin', log_files),
+                             ('/var/lib/irods/iRODS/installLogs', all_files),]
     for s, p in source_and_predicates:
         gathered_files += gather_files_in(s, output_directory, p)
     return gathered_files

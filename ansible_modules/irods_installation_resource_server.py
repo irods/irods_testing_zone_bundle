@@ -55,7 +55,7 @@ class GenericStrategy(object):
 
     @property
     def testing_dependencies(self):
-        return []
+        return ['git']
 
     @abc.abstractmethod
     def install_packages(self, packages):
