@@ -15,10 +15,10 @@ def get_target_identifier():
 class UnimplementedStrategy(object):
     def __init__(self, module):
         self.module = module
-        self.unimplmented_error()
+        self.unimplemented_error()
 
     def build(self):
-        self.unimplmented_error()
+        self.unimplemented_error()
 
     def unimplemented_error(self):
         platform = get_platform()
@@ -91,11 +91,17 @@ class GenericStrategy(object):
 class RedHatStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON']
+        base = ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON']
+        version_specific = {
+            '6': [],
+            '7': ['mysql++-devel'],
+        }
+        return base + version_specific[get_distribution_version_major()]
 
     def install_building_dependencies(self):
         super(RedHatStrategy, self).install_building_dependencies()
-        self.install_oracle_dependencies()
+        if get_distribution_version_major() == '6':
+            self.install_oracle_dependencies()
 
     def install_oracle_dependencies(self):
         tar_file = os.path.expanduser('~/oci.tar')
@@ -107,7 +113,8 @@ class RedHatStrategy(GenericStrategy):
 
     def build_irods_packages(self):
         super(RedHatStrategy, self).build_irods_packages()
-        self.module.run_command('sudo ./packaging/build.sh -r icat oracle > ./build/build_output_icat_oracle.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+        if get_distribution_version_major() == '6':
+            self.module.run_command('sudo ./packaging/build.sh -r icat oracle > ./build/build_output_icat_oracle.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
     def install_packages(self, packages):
         install_command = 'sudo yum install -y {0}'.format(' '.join(packages))
@@ -132,9 +139,14 @@ class SuseStrategy(GenericStrategy):
         install_command = 'sudo zypper --non-interactive install {0}'.format(' '.join(packages))
         self.module.run_command(install_command, check_rc=True)
 
-class CentOSBuilder(Builder):
+class CentOS6Builder(Builder):
     platform = 'Linux'
     distribution = 'Centos'
+    strategy_class = RedHatStrategy
+
+class CentOS7Builder(Builder):
+    platform = 'Linux'
+    distribution = 'Centos linux'
     strategy_class = RedHatStrategy
 
 class UbuntuBuilder(Builder):

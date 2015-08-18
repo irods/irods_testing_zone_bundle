@@ -31,15 +31,27 @@ def run_tests(test_type, use_ssl, output_directory):
     return returncode
 
 def create_irodsauthuser_account():
+    name, password = get_authuser_name_and_password()
     try:
-        pwd.getpwnam('irodsauthuser')
+        pwd.getpwnam(name)
     except KeyError:
-        subprocess.check_call('sudo useradd irodsauthuser', shell=True)
+        subprocess.check_call("sudo useradd '{0}'".format(name), shell=True)
 
     p = subprocess.Popen('sudo chpasswd', stdin=subprocess.PIPE, shell=True)
-    p.communicate(input='irodsauthuser:iamnotasecret')
+    p.communicate(input='{0}:{1}'.format(name, password))
     if p.returncode != 0:
-        raise RuntimeError('failed to change irodsauthuser password, return code: {0}'.format(str(p.returncode)))
+        raise RuntimeError('failed to change {0} password, return code: {1}'.format(name, p.returncode))
+
+def get_authuser_name_and_password():
+    config_file = '/var/lib/irods/tests/pydevtest/test_framework_configuration.json'
+    try:
+        with open(config_file) as f:
+            d = json.load(f)
+        return d['irods_authuser_name'], d['irods_authuser_password']
+    except IOError as e:
+        if e.errno == 2:
+            return 'irodsauthuser', 'iamnotasecret'
+        raise
 
 def main():
     module = AnsibleModule(

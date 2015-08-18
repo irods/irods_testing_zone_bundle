@@ -124,9 +124,14 @@ class SuseStrategy(GenericStrategy):
     def install_packages_from_file(self, packages):
         self.install_packages(packages)
 
-class CentOSResourceInstaller(ResourceInstaller):
+class CentOS6ResourceInstaller(ResourceInstaller):
     platform = 'Linux'
     distribution = 'Centos'
+    strategy_class = RedHatStrategy
+
+class CentOS7ResourceInstaller(ResourceInstaller):
+    platform = 'Linux'
+    distribution = 'Centos linux'
     strategy_class = RedHatStrategy
 
 class UbuntuResourceInstaller(ResourceInstaller):

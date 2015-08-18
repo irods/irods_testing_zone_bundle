@@ -64,20 +64,20 @@ class GenericStrategy(object):
         pass
 
     def install(self):
-        self.install_testing_dependencies()
         self.install_icat()
         self.install_database_plugin()
         self.install_database()
         self.configure_database()
         self.run_setup_script()
         self.post_install_configuration()
+        self.install_testing_dependencies()
 
     def install_testing_dependencies(self):
         if self.testing_dependencies:
             self.install_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
-        self.module.run_command('sudo -E pip2 install unittest-xml-reporting', check_rc=True)
+        self.module.run_command('sudo -E pip2 install --upgrade unittest-xml-reporting', check_rc=True)
 
     @property
     def testing_dependencies(self):
@@ -207,10 +207,14 @@ ICAT =
 
     def post_install_configuration(self):
         self.enable_pam()
-        self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
 
     def enable_pam(self):
         subprocess.check_call('''sudo sh -c "echo 'auth        sufficient    pam_unix.so' > /etc/pam.d/irods"''', shell=True)
+
+    def install_testing_dependencies(self):
+        super(RedHatStrategy, self).install_testing_dependencies()
+        if get_distribution_version_major() == '6':
+            self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
 
 class DebianStrategy(GenericStrategy):
     def install_packages(self, packages):
@@ -271,9 +275,14 @@ class SuseStrategy(GenericStrategy):
     def enable_pam(self):
         subprocess.check_call('''sudo sh -c "echo 'auth        sufficient    pam_unix.so' > /etc/pam.d/irods"''', shell=True)
 
-class CentOSIcatInstaller(IcatInstaller):
+class CentOS6IcatInstaller(IcatInstaller):
     platform = 'Linux'
     distribution = 'Centos'
+    strategy_class = RedHatStrategy
+
+class CentOS7IcatInstaller(IcatInstaller):
+    platform = 'Linux'
+    distribution = 'Centos linux'
     strategy_class = RedHatStrategy
 
 class UbuntuIcatInstaller(IcatInstaller):

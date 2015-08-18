@@ -26,7 +26,7 @@ def deploy_build_vms_return_names_and_ips(build_name, output_root_directory):
     def generate_vm_name(build_name, os_name, os_version):
         return '{0} :: {1}_{2}'.format(build_name, os_name, os_version)
 
-    platform_targets = [('CentOS', '6'), ('Ubuntu', '12'), ('Ubuntu', '14'), ('openSUSE ', '13')]
+    platform_targets = [('CentOS', '6'), ('CentOS', '7'), ('Ubuntu', '12'), ('Ubuntu', '14'), ('openSUSE ', '13')]
     vm_names = [generate_vm_name(build_name, os_name, os_version) for os_name, os_version in platform_targets]
 
     proc_pool = multiprocessing.Pool(len(platform_targets))
