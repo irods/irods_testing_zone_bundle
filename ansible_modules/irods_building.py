@@ -6,12 +6,6 @@ import os
 import shutil
 
 
-def get_distribution_version_major():
-    return get_distribution_version().split('.')[0]
-
-def get_target_identifier():
-    return get_distribution() + '_' + get_distribution_version_major()
-
 class UnimplementedStrategy(object):
     def __init__(self, module):
         self.module = module
@@ -56,13 +50,9 @@ class GenericStrategy(object):
     def building_dependencies(self):
         pass
 
-    @abc.abstractmethod
-    def install_packages(self, packages):
-        pass
-
     @property
     def output_directory(self):
-        return os.path.join(self.output_root_directory, get_target_identifier())
+        return os.path.join(self.output_root_directory, get_irods_platform_string())
 
     def build(self):
         self.install_building_dependencies()
@@ -71,7 +61,7 @@ class GenericStrategy(object):
         self.copy_build_output()
 
     def install_building_dependencies(self):
-        self.install_packages(self.building_dependencies)
+        install_os_packages(self.building_dependencies)
 
     def prepare_git_repository(self):
         self.module.run_command('git clone --recursive {0} {1}'.format(self.git_repository, self.local_irods_git_dir), check_rc=True)
@@ -116,28 +106,15 @@ class RedHatStrategy(GenericStrategy):
         if get_distribution_version_major() == '6':
             self.module.run_command('sudo ./packaging/build.sh -r icat oracle > ./build/build_output_icat_oracle.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
-    def install_packages(self, packages):
-        install_command = 'sudo yum install -y {0}'.format(' '.join(packages))
-        self.module.run_command(install_command, check_rc=True)
-
 class DebianStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
         return ['git', 'g++', 'make', 'python-dev', 'help2man', 'unixodbc', 'libfuse-dev', 'libcurl4-gnutls-dev', 'libbz2-dev', 'zlib1g-dev', 'libpam0g-dev', 'libssl-dev', 'libxml2-dev', 'libkrb5-dev', 'unixodbc-dev', 'libjson-perl']
 
-    def install_packages(self, packages):
-        self.module.run_command('sudo apt-get update', check_rc=True)
-        install_command = 'sudo apt-get install -y {0}'.format(' '.join(packages))
-        self.module.run_command(install_command, check_rc=True)
-
 class SuseStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
         return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel']
-
-    def install_packages(self, packages):
-        install_command = 'sudo zypper --non-interactive install {0}'.format(' '.join(packages))
-        self.module.run_command(install_command, check_rc=True)
 
 class CentOS6Builder(Builder):
     platform = 'Linux'
@@ -181,4 +158,5 @@ def main():
 
 
 from ansible.module_utils.basic import *
+from ansible.module_utils.local_ansible_utils_extension import *
 main()

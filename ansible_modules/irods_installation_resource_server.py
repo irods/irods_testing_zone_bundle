@@ -10,12 +10,6 @@ import sys
 import time
 
 
-def get_distribution_version_major():
-    return get_distribution_version().split('.')[0]
-
-def get_target_identifier():
-    return get_distribution() + '_' + get_distribution_version_major()
-
 class UnimplementedStrategy(object):
     def __init__(self, module):
         self.module = module
@@ -57,17 +51,9 @@ class GenericStrategy(object):
     def testing_dependencies(self):
         return ['git']
 
-    @abc.abstractmethod
-    def install_packages(self, packages):
-        pass
-
-    @abc.abstractmethod
-    def install_packages_from_file(self, packages):
-        pass
-
     @property
     def irods_packages_directory(self):
-        return os.path.join(self.irods_packages_root_directory, get_target_identifier())
+        return os.path.join(self.irods_packages_root_directory, get_irods_platform_string())
 
     def install(self):
         self.install_testing_dependencies()
@@ -76,7 +62,7 @@ class GenericStrategy(object):
 
     def install_testing_dependencies(self):
         if self.testing_dependencies:
-            self.install_packages(self.testing_dependencies)
+            install_os_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
         self.module.run_command('sudo -E pip2 install unittest-xml-reporting', check_rc=True)
@@ -84,7 +70,7 @@ class GenericStrategy(object):
     def install_resource(self):
         resource_package_basename = filter(lambda x:'irods-resource' in x, os.listdir(self.irods_packages_directory))[0]
         resource_package = os.path.join(self.irods_packages_directory, resource_package_basename)
-        self.install_packages_from_file([resource_package])
+        install_os_packages_from_files([resource_package])
 
     def run_setup_script(self):
         setup_script_inputs = ['']*13 + [self.icat_server_hostname, 'tempZone', '', 'rods']
@@ -96,33 +82,11 @@ class RedHatStrategy(GenericStrategy):
     def testing_dependencies(self):
         return super(RedHatStrategy, self).testing_dependencies + ['python-unittest2']
 
-    def install_packages(self, packages):
-        args = ['sudo', 'yum', 'install', '-y'] + packages
-        self.module.run_command(args, check_rc=True)
-
-    def install_packages_from_file(self, packages):
-        args = ['sudo', 'yum', 'localinstall', '-y', '--nogpgcheck'] + packages
-        self.module.run_command(args, check_rc=True)
-
 class DebianStrategy(GenericStrategy):
-    def install_packages(self, packages):
-        self.module.run_command('sudo apt-get update', check_rc=True)
-        args = ['sudo', 'apt-get', 'install', '-y'] + packages
-        self.module.run_command(args, check_rc=True)
-
-    def install_packages_from_file(self, packages):
-        args = ['sudo', 'dpkg', '-i'] + packages
-        self.module.run_command(args) # no check_rc, missing deps return code 1
-        self.module.run_command('sudo apt-get update', check_rc=True)
-        self.module.run_command('sudo apt-get install -yf')
+    pass
 
 class SuseStrategy(GenericStrategy):
-    def install_packages(self, packages):
-        args = ['sudo', 'zypper', '--non-interactive', 'install'] + packages
-        self.module.run_command(args, check_rc=True)
-
-    def install_packages_from_file(self, packages):
-        self.install_packages(packages)
+    pass
 
 class CentOS6ResourceInstaller(ResourceInstaller):
     platform = 'Linux'
@@ -164,4 +128,5 @@ def main():
 
 
 from ansible.module_utils.basic import *
+from ansible.module_utils.local_ansible_utils_extension import *
 main()

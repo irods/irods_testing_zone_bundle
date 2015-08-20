@@ -7,12 +7,6 @@ import tempfile
 import time
 
 
-def get_distribution_version_major():
-    return get_distribution_version().split('.')[0]
-
-def get_target_identifier():
-    return get_distribution() + '_' + get_distribution_version_major()
-
 class UnimplementedStrategy(object):
     def __init__(self, module):
         self.module = module
@@ -52,14 +46,6 @@ class GenericStrategy(object):
         self.icat_database_hostname = module.params['icat_database_hostname']
 
     @abc.abstractmethod
-    def install_packages(self, packages):
-        pass
-
-    @abc.abstractmethod
-    def install_packages_from_file(self, packages):
-        pass
-
-    @abc.abstractmethod
     def install_database(self):
         pass
 
@@ -74,7 +60,7 @@ class GenericStrategy(object):
 
     def install_testing_dependencies(self):
         if self.testing_dependencies:
-            self.install_packages(self.testing_dependencies)
+            install_os_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
         self.module.run_command('sudo -E pip2 install --upgrade unittest-xml-reporting', check_rc=True)
@@ -86,16 +72,16 @@ class GenericStrategy(object):
     def install_icat(self):
         icat_package_basename = filter(lambda x:'irods-icat' in x, os.listdir(self.irods_packages_directory))[0]
         icat_package = os.path.join(self.irods_packages_directory, icat_package_basename)
-        self.install_packages_from_file([icat_package])
+        install_os_packages_from_files([icat_package])
 
     @property
     def irods_packages_directory(self):
-        return os.path.join(self.irods_packages_root_directory, get_target_identifier())
+        return os.path.join(self.irods_packages_root_directory, get_irods_platform_string())
 
     def install_database_plugin(self):
         database_plugin_basename = filter(lambda x:'irods-database-plugin-'+self.icat_database_type+'-' in x, os.listdir(self.irods_packages_directory))[0]
         database_plugin = os.path.join(self.irods_packages_directory, database_plugin_basename)
-        self.install_packages_from_file([database_plugin])
+        install_os_packages_from_files([database_plugin])
 
     def configure_database(self):
         if self.icat_database_type == 'postgres':
@@ -125,7 +111,7 @@ class GenericStrategy(object):
         pass
 
     def install_mysql_pcre(self, dependencies, mysql_service):
-        self.install_packages(dependencies)
+        install_os_packages(dependencies)
         local_pcre_git_dir = os.path.expanduser('~/lib_mysqludf_preg')
         self.module.run_command(['git', 'clone', 'https://github.com/mysqludf/lib_mysqludf_preg.git', local_pcre_git_dir], check_rc=True)
         self.module.run_command(['git', 'checkout', 'lib_mysqludf_preg-1.1'], cwd=local_pcre_git_dir, check_rc=True)
@@ -139,14 +125,6 @@ class RedHatStrategy(GenericStrategy):
     @property
     def testing_dependencies(self):
         return super(RedHatStrategy, self).testing_dependencies + ['python-unittest2']
-
-    def install_packages(self, packages):
-        args = ['sudo', 'yum', 'install', '-y'] + packages
-        self.module.run_command(args, check_rc=True)
-
-    def install_packages_from_file(self, packages):
-        args = ['sudo', 'yum', 'localinstall', '-y', '--nogpgcheck'] + packages
-        self.module.run_command(args, check_rc=True)
 
     def install_database_plugin(self):
         if self.icat_database_type != 'oracle':
@@ -169,20 +147,20 @@ class RedHatStrategy(GenericStrategy):
 
     def install_database(self):
         if self.icat_database_type == 'postgres':
-            self.install_packages(['postgresql-server'])
+            install_os_packages(['postgresql-server'])
             self.module.run_command('sudo su - postgres -c "initdb"', check_rc=True)
             self.module.run_command('sudo su - postgres -c "pg_ctl -D /var/lib/pgsql/data -l logfile start"', check_rc=True)
             time.sleep(5)
         elif self.icat_database_type == 'mysql':
             if get_distribution_version_major() == '6':
-                self.install_packages(['mysql-server'])
+                install_os_packages(['mysql-server'])
                 self.module.run_command(['sudo', 'service', 'mysqld', 'start'], check_rc=True)
                 self.module.run_command(['mysqladmin', '-u', 'root', 'password', 'password'], check_rc=True)
                 self.module.run_command(['sudo', 'sed', '-i', r's/\[mysqld\]/\[mysqld\]\nlog_bin_trust_function_creators=1/', '/etc/my.cnf'], check_rc=True)
                 self.module.run_command(['sudo', 'service', 'mysqld', 'restart'], check_rc=True)
                 self.install_mysql_pcre(['pcre-devel', 'gcc', 'make', 'automake', 'mysql-devel', 'autoconf', 'git'], 'mysqld')
             elif get_distribution_version_major() == '7':
-                self.install_packages(['mariadb-server'])
+                install_os_packages(['mariadb-server'])
                 self.module.run_command(['sudo', 'systemctl', 'start', 'mariadb'], check_rc=True)
                 self.module.run_command(['mysqladmin', '-u', 'root', 'password', 'password'], check_rc=True)
                 self.module.run_command(['sudo', 'sed', '-i', r's/\[mysqld\]/\[mysqld\]\nlog_bin_trust_function_creators=1/', '/etc/my.cnf'], check_rc=True)
@@ -227,24 +205,13 @@ ICAT =
             self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
 
 class DebianStrategy(GenericStrategy):
-    def install_packages(self, packages):
-        self.module.run_command('sudo apt-get update', check_rc=True)
-        args = ['sudo', 'apt-get', 'install', '-y'] + packages
-        self.module.run_command(args, check_rc=True)
-
-    def install_packages_from_file(self, packages):
-        args = ['sudo', 'dpkg', '-i'] + packages
-        self.module.run_command(args) # no check_rc, missing deps return code 1
-        self.module.run_command('sudo apt-get update', check_rc=True)
-        self.module.run_command('sudo apt-get install -yf')
-
     def install_database(self):
         if self.icat_database_type == 'postgres':
-            self.install_packages(['postgresql'])
+            install_os_packages(['postgresql'])
         elif self.icat_database_type == 'mysql':
             self.module.run_command(['sudo', 'debconf-set-selections'], data='mysql-server mysql-server/root_password password password', check_rc=True)
             self.module.run_command(['sudo', 'debconf-set-selections'], data='mysql-server mysql-server/root_password_again password password', check_rc=True)
-            self.install_packages(['mysql-server'])
+            install_os_packages(['mysql-server'])
             self.module.run_command(['sudo', 'su', '-', 'root', '-c', "echo '[mysqld]' > /etc/mysql/conf.d/irods.cnf"], check_rc=True)
             self.module.run_command(['sudo', 'su', '-', 'root', '-c', "echo 'log_bin_trust_function_creators=1' >> /etc/mysql/conf.d/irods.cnf"], check_rc=True)
             self.module.run_command(['sudo', 'service', 'mysql', 'restart'], check_rc=True)
@@ -253,23 +220,16 @@ class DebianStrategy(GenericStrategy):
             assert False, self.icat_database_type
 
 class SuseStrategy(GenericStrategy):
-    def install_packages(self, packages):
-        args = ['sudo', 'zypper', '--non-interactive', 'install'] + packages
-        self.module.run_command(args, check_rc=True)
-
-    def install_packages_from_file(self, packages):
-        self.install_packages(packages)
-
     def install_database(self):
         if self.icat_database_type == 'postgres':
-            self.install_packages(['postgresql-server'])
+            install_os_packages(['postgresql-server'])
             self.module.run_command('sudo su - postgres -c "initdb"', check_rc=True)
             conf_cmd = '''sudo su - postgres -c "echo 'standard_conforming_strings = off' >> /var/lib/pgsql/data/postgresql.conf"'''
             self.module.run_command(conf_cmd, check_rc=True)
             self.module.run_command('sudo su - postgres -c "pg_ctl -D /var/lib/pgsql/data -l logfile start"', check_rc=True)
             time.sleep(5)
         elif self.icat_database_type == 'mysql':
-            self.install_packages(['mysql-community-server'])
+            install_os_packages(['mysql-community-server'])
             self.module.run_command(['sudo', 'su', '-', 'root', '-c', "echo '[mysqld]' > /etc/my.cnf.d/irods.cnf"], check_rc=True)
             self.module.run_command(['sudo', 'su', '-', 'root', '-c', "echo 'log_bin_trust_function_creators=1' >> /etc/my.cnf.d/irods.cnf"], check_rc=True)
             self.module.run_command(['sudo', 'service', 'mysql', 'restart'], check_rc=True)
@@ -326,4 +286,5 @@ def main():
 
 
 from ansible.module_utils.basic import *
+from ansible.module_utils.local_ansible_utils_extension import *
 main()
