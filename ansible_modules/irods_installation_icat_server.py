@@ -174,12 +174,22 @@ class RedHatStrategy(GenericStrategy):
             self.module.run_command('sudo su - postgres -c "pg_ctl -D /var/lib/pgsql/data -l logfile start"', check_rc=True)
             time.sleep(5)
         elif self.icat_database_type == 'mysql':
-            self.install_packages(['mysql-server'])
-            self.module.run_command(['sudo', 'service', 'mysqld', 'start'], check_rc=True)
-            self.module.run_command(['mysqladmin', '-u', 'root', 'password', 'password'], check_rc=True)
-            self.module.run_command(['sudo', 'sed', '-i', r's/\[mysqld\]/\[mysqld\]\nlog_bin_trust_function_creators=1/', '/etc/my.cnf'], check_rc=True)
-            self.module.run_command(['sudo', 'service', 'mysqld', 'restart'], check_rc=True)
-            self.install_mysql_pcre(['pcre-devel', 'gcc', 'make', 'automake', 'mysql-devel', 'autoconf', 'git'], 'mysqld')
+            if get_distribution_version_major() == '6':
+                self.install_packages(['mysql-server'])
+                self.module.run_command(['sudo', 'service', 'mysqld', 'start'], check_rc=True)
+                self.module.run_command(['mysqladmin', '-u', 'root', 'password', 'password'], check_rc=True)
+                self.module.run_command(['sudo', 'sed', '-i', r's/\[mysqld\]/\[mysqld\]\nlog_bin_trust_function_creators=1/', '/etc/my.cnf'], check_rc=True)
+                self.module.run_command(['sudo', 'service', 'mysqld', 'restart'], check_rc=True)
+                self.install_mysql_pcre(['pcre-devel', 'gcc', 'make', 'automake', 'mysql-devel', 'autoconf', 'git'], 'mysqld')
+            elif get_distribution_version_major() == '7':
+                self.install_packages(['mariadb-server'])
+                self.module.run_command(['sudo', 'systemctl', 'start', 'mariadb'], check_rc=True)
+                self.module.run_command(['mysqladmin', '-u', 'root', 'password', 'password'], check_rc=True)
+                self.module.run_command(['sudo', 'sed', '-i', r's/\[mysqld\]/\[mysqld\]\nlog_bin_trust_function_creators=1/', '/etc/my.cnf'], check_rc=True)
+                self.module.run_command(['sudo', 'systemctl', 'restart', 'mariadb'], check_rc=True)
+                self.install_mysql_pcre(['pcre-devel', 'gcc', 'make', 'automake', 'mysql-devel', 'autoconf', 'git'], 'mariadb')
+            else:
+                assert False, get_distribution_version_major()
         elif self.icat_database_type == 'oracle':
             with tempfile.NamedTemporaryFile() as f:
                 f.write('''
