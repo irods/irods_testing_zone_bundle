@@ -2,6 +2,7 @@
 
 import abc
 import json
+import hashlib
 import os
 import platform
 import socket
@@ -73,9 +74,34 @@ class GenericStrategy(object):
         install_os_packages_from_files([resource_package])
 
     def run_setup_script(self):
-        setup_script_inputs = ['']*13 + [self.icat_server_hostname, 'tempZone', '', 'rods']
-        setup_script_string = '\n'.join(setup_script_inputs) + '\n'
+        if get_irods_version() < (4, 1):
+            self.fix_403_setup_script()
+            setup_script_inputs = ['']*8 + ['rods', '', self.icat_server_hostname, 'tempZone', '', 'rods']
+            setup_script_string = '\n'.join(setup_script_inputs) + '\n'
+        else:
+            setup_script_inputs = ['']*13 + [self.icat_server_hostname, 'tempZone', '', 'rods']
+            setup_script_string = '\n'.join(setup_script_inputs) + '\n'
         self.module.run_command('sudo /var/lib/irods/packaging/setup_irods.sh', data=setup_script_string, check_rc=True)
+
+    def fix_403_setup_script(self):
+        # https://github.com/irods/irods/issues/2498
+        script = '/var/lib/irods/packaging/get_icat_server_password.sh'
+        with open(script, 'rb') as f:
+            b = f.read()
+        sha256_hex_403 = '0349c2c31a52dc21f77ffe8cb4bb16f3ce3bdf1b86a14e94ba994f8a7905b137'
+        h = hashlib.sha256()
+        h.update(b)
+        if h.hexdigest() == sha256_hex_403:
+            self.module.run_command('sudo chmod o+w {0}'.format(script), check_rc=True)
+            contents = '''\
+#!/bin/bash -e
+
+# get admin password, without showing on screen
+read -s IRODS_ADMIN_PASSWORD
+echo -n $IRODS_ADMIN_PASSWORD
+'''
+            with open(script, 'w') as f:
+                f.write(contents)
 
 class RedHatStrategy(GenericStrategy):
     @property

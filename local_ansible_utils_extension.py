@@ -19,7 +19,11 @@
 #
 #  install_os_packages_from_files(files)
 #   files is a list of strings of filenames (e.g. ["irods-icat-4.1.4-64bit-centos6.rpm"]
+#
+#  get_irods_version() -> three-tuple of ints (e.g. (4, 1, 5))
+#   throws RuntimeError if no irods version files present
 
+import json
 import subprocess
 
 
@@ -100,3 +104,35 @@ def install_os_packages_from_files(files):
         dispatch_map[get_distribution()](files)
     except KeyError:
         raise NotImplementedError('install_os_packages_from_files() for [{0}]'.format(get_distribution()))
+
+def get_irods_version():
+    version = get_irods_version_from_json()
+    if version:
+        return version
+    version = get_irods_version_from_bash()
+    if version:
+        return version
+    raise RuntimeError('Unable to determine iRODS version')
+
+def get_irods_version_from_json():
+    try:
+        with open('/var/lib/irods/VERSION.json') as f:
+            version_string = json.load(f)['irods_version']
+    except IOError as e:
+        if e.errno != 2:
+            raise
+        return None
+    return tuple(map(int, version_string.split('.')))
+
+def get_irods_version_from_bash():
+    try:
+        with open('/var/lib/irods/VERSION') as f:
+            for line in f:
+                key, _, value = line.rstrip('\n').partition('=')
+                if key == 'IRODSVERSION':
+                    return tuple(map(int, value.split('.')))
+            return None
+    except IOError as e:
+        if e.errno != 2:
+            raise
+        return None

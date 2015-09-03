@@ -135,8 +135,11 @@ if __name__ == '__main__':
     parser.add_argument('--zone_bundle_input', type=str, required=True)
     parser.add_argument('--deployment_name', type=str, required=True)
     parser.add_argument('--packages_root_directory', type=str, required=True)
-    parser.add_argument('--zone_bundle_output', type=str, required=True)
+    parser.add_argument('--zone_bundle_output', type=str)
     args = parser.parse_args()
+
+    if not args.zone_bundle_output:
+        args.zone_bundle_output = os.path.abspath(args.deployment_name + '.json')
 
     with open(args.zone_bundle_input) as f:
         zone_bundle = json.load(f)
