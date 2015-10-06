@@ -88,7 +88,7 @@ def register_log_handlers():
     logging.Formatter.converter = time.gmtime
     logger_root = logging.getLogger()
     logging_handler_stdout = logging.StreamHandler(sys.stdout)
-    logging_handler_stdout.setFormatter(logging.Formatter('%(asctime)s - %(levelname)7s - %(filename)s:%(lineno)4d\n%(message)s'))
+    logging_handler_stdout.setFormatter(logging.Formatter('%(asctime)s - %(levelname)7s - %(pathname)s:%(lineno)4d\n%(message)s'))
     logger_root.addHandler(logging_handler_stdout)
     logger_root.setLevel(logging.INFO)
 

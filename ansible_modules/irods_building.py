@@ -57,8 +57,7 @@ class GenericStrategy(object):
     def build(self):
         self.install_building_dependencies()
         self.prepare_git_repository()
-        self.build_irods_packages()
-        self.copy_build_output()
+        self.build_irods_packages_and_copy_output()
 
     def install_building_dependencies(self):
         install_os_packages(self.building_dependencies)
@@ -68,6 +67,12 @@ class GenericStrategy(object):
         self.module.run_command('git checkout {0}'.format(self.git_commitish), cwd=self.local_irods_git_dir, check_rc=True)
         self.module.run_command('git submodule update --init --recursive', cwd=self.local_irods_git_dir, check_rc=True)
 
+    def build_irods_packages_and_copy_output(self):
+        try:
+            self.build_irods_packages()
+        finally:
+            shutil.copytree(os.path.join(self.local_irods_git_dir, 'build'), self.output_directory)
+
     def build_irods_packages(self):
         os.makedirs(os.path.join(self.local_irods_git_dir, 'build'))
         build_flags = '' if self.debug_build else '-r'
@@ -75,13 +80,10 @@ class GenericStrategy(object):
         self.module.run_command('sudo ./packaging/build.sh {0} resource postgres > ./build/build_output_resource.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
         self.module.run_command('sudo ./packaging/build.sh {0} icat mysql > ./build/build_output_icat_mysql.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
-    def copy_build_output(self):
-        shutil.copytree(os.path.join(self.local_irods_git_dir, 'build'), self.output_directory)
-
 class RedHatStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        base = ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON']
+        base = ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON', 'python-psutil']
         version_specific = {
             '6': [],
             '7': ['mysql++-devel'],
@@ -109,12 +111,12 @@ class RedHatStrategy(GenericStrategy):
 class DebianStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['git', 'g++', 'make', 'python-dev', 'help2man', 'unixodbc', 'libfuse-dev', 'libcurl4-gnutls-dev', 'libbz2-dev', 'zlib1g-dev', 'libpam0g-dev', 'libssl-dev', 'libxml2-dev', 'libkrb5-dev', 'unixodbc-dev', 'libjson-perl']
+        return ['git', 'g++', 'make', 'python-dev', 'help2man', 'unixodbc', 'libfuse-dev', 'libcurl4-gnutls-dev', 'libbz2-dev', 'zlib1g-dev', 'libpam0g-dev', 'libssl-dev', 'libxml2-dev', 'libkrb5-dev', 'unixodbc-dev', 'libjson-perl', 'python-psutil']
 
 class SuseStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel']
+        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel', 'python-psutil']
 
 class CentOS6Builder(Builder):
     platform = 'Linux'

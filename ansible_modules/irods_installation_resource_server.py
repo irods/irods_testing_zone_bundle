@@ -8,6 +8,7 @@ import platform
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -57,16 +58,16 @@ class GenericStrategy(object):
         return os.path.join(self.irods_packages_root_directory, get_irods_platform_string())
 
     def install(self):
-        self.install_testing_dependencies()
         self.install_resource()
         self.run_setup_script()
+        self.install_testing_dependencies()
 
     def install_testing_dependencies(self):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
-        self.module.run_command('sudo -E pip2 install unittest-xml-reporting', check_rc=True)
+        self.module.run_command('sudo -E pip2 install --upgrade unittest-xml-reporting', check_rc=True)
 
     def install_resource(self):
         resource_package_basename = filter(lambda x:'irods-resource' in x, os.listdir(self.irods_packages_directory))[0]
@@ -81,7 +82,13 @@ class GenericStrategy(object):
         else:
             setup_script_inputs = ['']*13 + [self.icat_server_hostname, 'tempZone', '', 'rods']
             setup_script_string = '\n'.join(setup_script_inputs) + '\n'
-        self.module.run_command('sudo /var/lib/irods/packaging/setup_irods.sh', data=setup_script_string, check_rc=True)
+        setup_script_input_file_initial = '/home/irodsbuild/setup_irods.input'
+        setup_script_input_file_final = '/var/lib/irods/iRODS/installLogs/setup_irods.input'
+        with open(setup_script_input_file_initial, 'w') as f:
+            f.write(setup_script_string)
+        self.module.run_command(['sudo', 'mv', setup_script_input_file_initial, setup_script_input_file_final], check_rc=True)
+        output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
+        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} > {1} 2>&1'.format(setup_script_input_file_final, output_log)], use_unsafe_shell=True, check_rc=True)
 
     def fix_403_setup_script(self):
         # https://github.com/irods/irods/issues/2498

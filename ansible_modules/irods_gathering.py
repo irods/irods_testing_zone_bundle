@@ -24,6 +24,7 @@ def gather(output_root_directory):
                              ('/tmp/irods', all_files),
                              ('/var/lib/irods/tests/pydevtest/test-reports', all_files),
                              ('/var/lib/irods/iRODS/server/test/bin', log_files),
+                             ('/var/lib/irods', version_file),
                              ('/var/lib/irods/iRODS/installLogs', all_files),]
     for s, p in source_and_predicates:
         gathered_files += gather_files_in(s, output_directory, p)
@@ -34,6 +35,9 @@ def all_files(x):
 
 def log_files(x):
     return x.endswith('.log')
+
+def version_file(x):
+    return os.path.basename(x).startswith('VERSION')
 
 def gather_files_in(source_directory, output_directory, predicate):
     try:

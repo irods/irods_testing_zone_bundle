@@ -105,7 +105,8 @@ class GenericStrategy(object):
             'oracle': '/var/lib/irods/tests/remote_setup_oracle.input',
         }
         setup_script = setup_script_location_dict[self.icat_database_type]
-        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} > /var/lib/irods/iRODS/installLogs/setup_irods.output 2>&1'.format(setup_script)], use_unsafe_shell=True, check_rc=True)
+        output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
+        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} > {1} 2>&1'.format(setup_script, output_log)], use_unsafe_shell=True, check_rc=True)
 
     def post_install_configuration(self):
         pass
