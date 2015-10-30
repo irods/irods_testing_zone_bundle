@@ -30,17 +30,14 @@ if __name__ == '__main__':
         zone_bundle = json.load(f)
 
     zone_bundle_output = os.path.join(args.output_directory, 'deployed_zone_bundle.json')
-
-    if args.upgrade_test:
-        package_directories = args.upgrade_test
-        deployed_zone_bundle = deploy.deploy(zone_bundle, args.deployment_name, package_directories[0], zone_bundle_output)
-        for pd in package_directories[1:]:
-            upgrade.upgrade(deployed_zone_bundle, pd)
-        upgrade.upgrade(deployed_zone_bundle, args.packages_root_directory)
-    else:
-        deployed_zone_bundle = deploy.deploy(zone_bundle, args.deployment_name, args.packages_root_directory, zone_bundle_output)
-
+    initial_package = args.upgrade_test[0] if args.upgrade_test else args.packages_root_directory
+    deployed_zone_bundle = deploy.deploy(zone_bundle, args.deployment_name, initial_package, zone_bundle_output)
     with destroy.deployed_zone_bundle_manager(deployed_zone_bundle):
+        if args.upgrade_test:
+            for pd in args.upgrade_test[1:]:
+                upgrade.upgrade(deployed_zone_bundle, pd)
+            upgrade.upgrade(deployed_zone_bundle, args.packages_root_directory)
+
         if args.use_ssl:
             enable_ssl.enable_ssl(deployed_zone_bundle)
         tests_passed = test.test(deployed_zone_bundle, args.test_type, args.use_ssl, args.output_directory)
