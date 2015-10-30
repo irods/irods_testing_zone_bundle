@@ -23,12 +23,17 @@ def gather(output_root_directory):
     source_and_predicates = [('/var/lib/irods/iRODS/server/log', all_files),
                              ('/tmp/irods', all_files),
                              ('/var/lib/irods/tests/pydevtest/test-reports', all_files),
+                             ('/var/lib/irods/scripts/test-reports', all_files),
                              ('/var/lib/irods/iRODS/server/test/bin', log_files),
-                             ('/var/lib/irods', version_file),
-                             ('/var/lib/irods/iRODS/installLogs', all_files),]
+                             ('/var/lib/irods', _or(version_files, ini_files)),
+                             ('/var/lib/irods/iRODS/installLogs', all_files),
+                             ('/var/lib/irods/log', all_files),]
     for s, p in source_and_predicates:
         gathered_files += gather_files_in(s, output_directory, p)
     return gathered_files
+
+def _or(f0, f1):
+    return lambda x: f0(x) or f1(x)
 
 def all_files(x):
     return True
@@ -36,8 +41,11 @@ def all_files(x):
 def log_files(x):
     return x.endswith('.log')
 
-def version_file(x):
+def version_files(x):
     return os.path.basename(x).startswith('VERSION')
+
+def ini_files(x):
+    return x.endswith('.ini')
 
 def gather_files_in(source_directory, output_directory, predicate):
     try:
