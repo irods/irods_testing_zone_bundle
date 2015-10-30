@@ -106,7 +106,7 @@ class GenericStrategy(object):
         }
         setup_script = setup_script_location_dict[self.icat_database_type]
         output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
-        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} > {1} 2>&1'.format(setup_script, output_log)], use_unsafe_shell=True, check_rc=True)
+        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(setup_script, output_log)], use_unsafe_shell=True, check_rc=True)
 
     def post_install_configuration(self):
         pass
