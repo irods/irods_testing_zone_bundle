@@ -113,6 +113,23 @@ class DebianStrategy(GenericStrategy):
     def building_dependencies(self):
         return ['git', 'g++', 'make', 'python-dev', 'help2man', 'unixodbc', 'libfuse-dev', 'libcurl4-gnutls-dev', 'libbz2-dev', 'zlib1g-dev', 'libpam0g-dev', 'libssl-dev', 'libxml2-dev', 'libkrb5-dev', 'unixodbc-dev', 'libjson-perl', 'python-psutil']
 
+    def install_building_dependencies(self):
+        super(DebianStrategy, self).install_building_dependencies()
+        self.install_oracle_dependencies()
+
+    def install_oracle_dependencies(self):
+        tar_file = os.path.expanduser('~/oci.tar')
+        self.module.run_command(['wget', 'http://people.renci.org/~jasonc/irods/oci.tar', '-O', tar_file], check_rc=True)
+        tar_dir = os.path.expanduser('~/oci')
+        os.mkdir(tar_dir)
+        self.module.run_command(['tar', '-xf', 'oci.tar', '-C', tar_dir], check_rc=True)
+        install_os_packages(['alien', 'libaio1'])
+        self.module.run_command('sudo alien -i ./oci/*', use_unsafe_shell=True, check_rc=True)
+
+    def build_irods_packages(self):
+        super(DebianStrategy, self).build_irods_packages()
+        self.module.run_command('sudo ./packaging/build.sh -r icat oracle > ./build/build_output_icat_oracle.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+
 class SuseStrategy(GenericStrategy):
     @property
     def building_dependencies(self):

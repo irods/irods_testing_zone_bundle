@@ -139,7 +139,9 @@ class RedHatStrategy(GenericStrategy):
         tar_dir = os.path.expanduser('~/oci')
         os.mkdir(tar_dir)
         self.module.run_command(['tar', '-xf', 'oci.tar', '-C', tar_dir], check_rc=True)
+        install_os_packages(['unixODBC'])
         self.module.run_command('sudo rpm -i --nodeps ./oci/*', use_unsafe_shell=True, check_rc=True)
+        self.module.run_command(['sudo', 'ln', '-s', '/usr/lib64/libodbcinst.so.2', '/usr/lib64/libodbcinst.so.1'], check_rc=True)
 
     def install_oracle_plugin(self):
         database_plugin_basename = filter(lambda x:'irods-database-plugin-'+self.icat_database_type+'-' in x, os.listdir(self.irods_packages_directory))[0]
@@ -206,6 +208,20 @@ ICAT =
             self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
 
 class DebianStrategy(GenericStrategy):
+    def install_database_plugin(self):
+        if self.icat_database_type == 'oracle':
+            self.install_oracle_dependencies()
+        return super(DebianStrategy, self).install_database_plugin()
+
+    def install_oracle_dependencies(self):
+        tar_file = os.path.expanduser('~/oci.tar')
+        self.module.run_command(['wget', 'http://people.renci.org/~jasonc/irods/oci.tar', '-O', tar_file], check_rc=True)
+        tar_dir = os.path.expanduser('~/oci')
+        os.mkdir(tar_dir)
+        self.module.run_command(['tar', '-xf', 'oci.tar', '-C', tar_dir], check_rc=True)
+        install_os_packages(['alien', 'libaio1'])
+        self.module.run_command('sudo alien -i ./oci/*', use_unsafe_shell=True, check_rc=True)
+
     def install_database(self):
         if self.icat_database_type == 'postgres':
             install_os_packages(['postgresql'])
@@ -217,6 +233,28 @@ class DebianStrategy(GenericStrategy):
             self.module.run_command(['sudo', 'su', '-', 'root', '-c', "echo 'log_bin_trust_function_creators=1' >> /etc/mysql/conf.d/irods.cnf"], check_rc=True)
             self.module.run_command(['sudo', 'service', 'mysql', 'restart'], check_rc=True)
             self.install_mysql_pcre(['libpcre3-dev', 'libmysqlclient-dev', 'build-essential', 'libtool', 'autoconf', 'git'], 'mysql')
+        elif self.icat_database_type == 'oracle':
+            with tempfile.NamedTemporaryFile() as f:
+                f.write('''
+export LD_LIBRARY_PATH=/usr/lib/oracle/11.2/client64/lib:$LD_LIBRARY_PATH
+export ORACLE_HOME=/usr/lib/oracle/11.2/client64
+export PATH=$ORACLE_HOME/bin:$PATH
+''')
+                f.flush()
+                self.module.run_command(['sudo', 'su', '-c', "cat '{0}' >> /etc/profile.d/oracle.sh".format(f.name)], check_rc=True)
+            self.module.run_command(['sudo', 'su', '-c', "echo 'ORACLE_HOME=/usr/lib/oracle/11.2/client64' >> /etc/environment"], check_rc=True)
+            self.module.run_command('sudo mkdir -p /usr/lib/oracle/11.2/client64/network/admin', check_rc=True)
+            tns_contents = '''
+ICAT =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = default-cloud-hostname-oracle.example.org)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = ICAT.example.org)
+    )
+  )
+'''
+            self.module.run_command(['sudo', 'su', '-c', "echo '{0}' > /usr/lib/oracle/11.2/client64/network/admin/tnsnames.ora".format(tns_contents)], check_rc=True)
         else:
             assert False, self.icat_database_type
 
