@@ -1,5 +1,7 @@
 import imp
 import logging
+import multiprocessing
+import multiprocessing.pool
 import os
 import signal
 import sys
@@ -17,6 +19,23 @@ module_tuple = imp.find_module(configuration.provisioner_module_name, [configura
 imp.load_module('provisioner_lib', *module_tuple)
 import provisioner_lib
 
+# Allows recursive multiprocessing, from http://stackoverflow.com/a/8963618
+class NoDaemonProcess(multiprocessing.Process):
+    @property
+    def daemon(self):
+        return False
+    @daemon.setter
+    def daemon(self, value):
+        pass
+
+class RecursiveMultiprocessingPool(multiprocessing.pool.Pool):
+    Process = NoDaemonProcess
+
+def get_servers_from_zone_bundle(zone_bundle):
+    servers = []
+    for zone in zone_bundle['zones']:
+        servers.extend(get_servers_from_zone(zone))
+    return servers
 
 def get_servers_from_zone(zone):
     return [zone['icat_server']] + zone['resource_servers']

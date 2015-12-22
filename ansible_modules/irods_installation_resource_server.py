@@ -93,12 +93,8 @@ class GenericStrategy(object):
     def fix_403_setup_script(self):
         # https://github.com/irods/irods/issues/2498
         script = '/var/lib/irods/packaging/get_icat_server_password.sh'
-        with open(script, 'rb') as f:
-            b = f.read()
         sha256_hex_403 = '0349c2c31a52dc21f77ffe8cb4bb16f3ce3bdf1b86a14e94ba994f8a7905b137'
-        h = hashlib.sha256()
-        h.update(b)
-        if h.hexdigest() == sha256_hex_403:
+        if self.module.sha256(script) == sha256_hex_403:
             self.module.run_command('sudo chmod o+w {0}'.format(script), check_rc=True)
             contents = '''\
 #!/bin/bash -e

@@ -21,7 +21,10 @@ def destroy(zone_bundle):
     destroy_zone_bundle(zone_bundle)
 
 def destroy_zone_bundle(zone_bundle):
-    destroy_zone(zone_bundle['zones'][0])
+    proc_pool = library.RecursiveMultiprocessingPool(len(zone_bundle['zones']))
+    proc_pool_results = [proc_pool.apply_async(destroy_zone, (zone,))
+                         for zone in zone_bundle['zones']]
+    [result.get() for result in proc_pool_results]
 
 def destroy_zone(zone):
     servers = library.get_servers_from_zone(zone)

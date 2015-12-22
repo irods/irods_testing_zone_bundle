@@ -42,8 +42,8 @@ class GenericStrategy(object):
     def __init__(self, module):
         self.module = module
         self.irods_packages_root_directory = module.params['irods_packages_root_directory']
-        self.icat_database_type = module.params['icat_database_type']
-        self.icat_database_hostname = module.params['icat_database_hostname']
+        self.icat_server = module.params['icat_server']
+        self.icat_database_type = module.params['icat_server']['database_config']['catalog_database_type']
 
     @abc.abstractmethod
     def install_database(self):
@@ -56,6 +56,7 @@ class GenericStrategy(object):
         self.configure_database()
         self.run_setup_script()
         self.post_install_configuration()
+        self.apply_zone_bundle()
         self.install_testing_dependencies()
 
     def install_testing_dependencies(self):
@@ -99,17 +100,114 @@ class GenericStrategy(object):
             assert False, self.icat_database_type
 
     def run_setup_script(self):
-        setup_script_location_dict = {
-            'postgres': '/var/lib/irods/tests/localhost_setup_postgres.input',
-            'mysql': '/var/lib/irods/tests/localhost_setup_mysql.input',
-            'oracle': '/var/lib/irods/tests/remote_setup_oracle.input',
+        def get_setup_input_template():
+            irods_version = get_irods_version()[0:2]
+            if irods_version == (4, 0):
+                server_portion = '''\
+{service_account_name}
+{service_account_group}
+{zone_name}
+{zone_port}
+{server_port_range_start}
+{server_port_range_end}
+{vault_directory}
+{zone_key}
+{negotiation_key}
+{irods_admin_account_name}
+{irods_admin_account_password}
+
+'''
+                db_portion = '''\
+{database_hostname}
+{database_port}
+{database_name}
+{database_username}
+{database_password}
+
+'''
+                return server_portion + db_portion
+            elif irods_version in [(4, 1), (4, 2)]:
+                server_portion = '''\
+{service_account_name}
+{service_account_group}
+{zone_name}
+{zone_port}
+{server_port_range_start}
+{server_port_range_end}
+{vault_directory}
+{zone_key}
+{negotiation_key}
+{control_plane_port}
+{control_plane_key}
+{schema_validation_base_uri}
+{irods_admin_account_name}
+{irods_admin_account_password}
+
+'''
+                if self.icat_server['database_config']['catalog_database_type'] == 'oracle':
+                    db_portion = '''\
+{oracle_home}
+{database_connection_string}
+{database_password}
+
+'''
+                else:
+                    db_portion = '''\
+{database_hostname}
+{database_port}
+{database_name}
+{database_username}
+{database_password}
+
+'''
+                return server_portion + db_portion
+            else:
+                assert False, 'get_setup_input_template() does not support iRODS version {0}'.format(get_irods_version())
+
+        setup_values = {
+            'service_account_name': '',
+            'service_account_group': '',
+            'zone_name': self.icat_server['server_config']['zone_name'],
+            'zone_port': self.icat_server['server_config']['zone_port'],
+            'server_port_range_start': self.icat_server['server_config']['server_port_range_start'],
+            'server_port_range_end': self.icat_server['server_config']['server_port_range_end'],
+            'vault_directory': '',
+            'zone_key': self.icat_server['server_config']['zone_key'],
+            'negotiation_key': self.icat_server['server_config']['negotiation_key'],
+            'control_plane_port': self.icat_server['server_config']['server_control_plane_port'],
+            'control_plane_key': self.icat_server['server_config']['server_control_plane_key'],
+            'schema_validation_base_uri': self.icat_server['server_config']['schema_validation_base_uri'],
+            'irods_admin_account_name':  self.icat_server['server_config']['zone_user'],
+            'irods_admin_account_password': 'rods',
         }
-        setup_script = setup_script_location_dict[self.icat_database_type]
+        if self.icat_server['database_config']['catalog_database_type'] == 'oracle':
+            setup_values_database = {
+                'oracle_home': '/usr/lib/oracle/11.2/client64',
+                'database_connection_string': self.icat_server['database_config']['db_username'],
+                'database_password': self.icat_server['database_config']['db_password'],
+            }
+        else:
+            setup_values_database = {
+                'database_hostname': self.icat_server['database_config']['db_host'],
+                'database_port': self.icat_server['database_config']['db_port'],
+                'database_name': self.icat_server['database_config']['db_name'],
+                'database_username': self.icat_server['database_config']['db_username'],
+                'database_password': self.icat_server['database_config']['db_password'],
+            }
+        setup_values.update(setup_values_database)
+        setup_input = get_setup_input_template().format(**setup_values)
         output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
-        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(setup_script, output_log)], use_unsafe_shell=True, check_rc=True)
+        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh 2>&1 | tee {0}; exit $PIPESTATUS'.format(output_log)], use_unsafe_shell=True, check_rc=True, data=setup_input)
 
     def post_install_configuration(self):
         pass
+
+    def apply_zone_bundle(self):
+        with open('/etc/irods/server_config.json') as f:
+            d = json.load(f)
+        d['federation'] = self.icat_server['server_config']['federation']
+        with open('/etc/irods/server_config.json', 'w') as f:
+            json.dump(d, f, indent=4, sort_keys=True)
 
     def install_mysql_pcre(self, dependencies, mysql_service):
         install_os_packages(dependencies)
@@ -138,9 +236,9 @@ class RedHatStrategy(GenericStrategy):
         self.module.run_command(['wget', 'http://people.renci.org/~jasonc/irods/oci.tar', '-O', tar_file], check_rc=True)
         tar_dir = os.path.expanduser('~/oci')
         os.mkdir(tar_dir)
-        self.module.run_command(['tar', '-xf', 'oci.tar', '-C', tar_dir], check_rc=True)
+        self.module.run_command(['tar', '-xf', tar_file, '-C', tar_dir], check_rc=True)
         install_os_packages(['unixODBC'])
-        self.module.run_command('sudo rpm -i --nodeps ./oci/*', use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('sudo rpm -i --nodeps {0}/*'.format(tar_dir), use_unsafe_shell=True, check_rc=True)
         self.module.run_command(['sudo', 'ln', '-s', '/usr/lib64/libodbcinst.so.2', '/usr/lib64/libodbcinst.so.1'], check_rc=True)
 
     def install_oracle_plugin(self):
@@ -197,6 +295,7 @@ ICAT =
             assert False, self.icat_database_type
 
     def post_install_configuration(self):
+        super(RedHatStrategy, self).post_install_configuration()
         self.enable_pam()
 
     def enable_pam(self):
@@ -308,8 +407,7 @@ def main():
     module = AnsibleModule(
         argument_spec = dict(
             irods_packages_root_directory=dict(type='str', required=True),
-            icat_database_type=dict(choices=['postgres', 'mysql', 'oracle'], type='str', required=True),
-            icat_database_hostname=dict(type='str', required=True),
+            icat_server=dict(type='dict', required=True),
         ),
         supports_check_mode=False,
     )

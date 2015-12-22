@@ -2,7 +2,6 @@ import argparse
 import copy
 import json
 import logging
-import multiprocessing
 import os
 
 import configuration
@@ -10,24 +9,28 @@ import destroy
 import library
 
 
-def deploy(zone_bundle_input, deployment_name, packages_root_directory, zone_bundle_output_file=None):
+def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None):
     zone_bundle_deployed = deploy_zone_bundle(zone_bundle_input, deployment_name)
     with destroy.deployed_zone_bundle_manager(zone_bundle_deployed, only_on_exception=True):
         if zone_bundle_output_file:
             save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed)
-
         configure_zone_bundle_networking(zone_bundle_deployed)
-        install_irods_on_zone_bundle(zone_bundle_deployed, packages_root_directory)
-
+        install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map)
+        configure_federation_on_zone_bundle(zone_bundle_deployed)
     return zone_bundle_deployed
 
 def deploy_zone_bundle(zone_bundle_input, deployment_name):
     zone_bundle = copy.deepcopy(zone_bundle_input)
-    deploy_zone_set_server_ip(zone_bundle['zones'][0], deployment_name)
+    proc_pool = library.RecursiveMultiprocessingPool(len(zone_bundle['zones']))
+    proc_pool_results = [proc_pool.apply_async(deploy_zone_set_server_ip,
+                                               (zone, deployment_name))
+                         for zone in zone_bundle['zones']]
+    zone_bundle['zones'] = [result.get() for result in proc_pool_results]
     return zone_bundle
 
-def deploy_zone_set_server_ip(zone, deployment_name):
+def deploy_zone_set_server_ip(zone_input, deployment_name):
     logger = logging.getLogger(__name__)
+    zone = copy.deepcopy(zone_input)
     def generate_vm_name(server, deployment_name):
         zone_name = server['server_config']['zone_name']
         hostname = server['hostname']
@@ -39,7 +42,7 @@ def deploy_zone_set_server_ip(zone, deployment_name):
         server['deployment_information']['vm_name'] = generate_vm_name(server, deployment_name)
 
     servers = library.get_servers_from_zone(zone)
-    proc_pool = multiprocessing.Pool(len(servers))
+    proc_pool = library.RecursiveMultiprocessingPool(len(servers))
     proc_pool_results = [proc_pool.apply_async(library.deploy_vm_return_ip,
                                                (server['deployment_information']['vm_name'],
                                                 (server['host_system_information']['os_distribution_name'],
@@ -60,6 +63,7 @@ def deploy_zone_set_server_ip(zone, deployment_name):
             database_config['deployment_information'] = {}
         database_config['deployment_information']['vm_name'] = db_vm_name
         database_config['deployment_information']['ip_address'] = db_ip_address
+    return zone
 
 def save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed):
     library.makedirs_catch_preexisting(os.path.dirname(os.path.abspath(zone_bundle_output_file)))
@@ -67,15 +71,15 @@ def save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed):
         json.dump(zone_bundle_deployed, f, indent=4)
 
 def configure_zone_bundle_networking(zone_bundle):
-    configure_zone_networking(zone_bundle['zones'][0])
+    servers = library.get_servers_from_zone_bundle(zone_bundle)
+    for zone in zone_bundle['zones']:
+        configure_zone_networking(zone, servers)
 
-def configure_zone_networking(zone):
-    configure_zone_hosts_files(zone)
+def configure_zone_networking(zone, servers):
+    configure_zone_hosts_files(zone, servers)
     configure_zone_hostnames(zone)
 
-def configure_zone_hosts_files(zone):
-    servers = library.get_servers_from_zone(zone)
-
+def configure_zone_hosts_files(zone, servers):
     ip_address_to_hostnames_dict = {server['deployment_information']['ip_address']: [server['hostname']] for server in servers}
     ip_address_to_hostnames_dict['127.0.0.1'] = ['localhost']
 
@@ -102,41 +106,59 @@ def configure_zone_hosts_files(zone):
 def configure_zone_hostnames(zone):
     servers = library.get_servers_from_zone(zone)
     for server in servers:
-        host_list = [server['deployment_information']['ip_address']]
-        library.run_ansible(module_name='hostname', module_args='name={0}'.format(server['hostname']), host_list=host_list, sudo=True)
+        server_ip = server['deployment_information']['ip_address']
+        library.run_ansible(module_name='hostname', module_args='name={0}'.format(server['hostname']), host_list=[server_ip], sudo=True)
 
-def install_irods_on_zone_bundle(zone_bundle, packages_root_directory):
-    install_irods_on_zone(zone_bundle['zones'][0], packages_root_directory)
+def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map):
+    proc_pool = library.RecursiveMultiprocessingPool(len(zone_bundle['zones']))
+    proc_pool_results = [proc_pool.apply_async(install_irods_on_zone,
+                                               (zone, version_to_packages_map))
+                         for zone in zone_bundle['zones']]
+    [result.get() for result in proc_pool_results]
 
-def install_irods_on_zone(zone, packages_root_directory):
-    install_irods_on_zone_icat_server(zone['icat_server'], packages_root_directory)
-    install_irods_on_zone_resource_servers(zone['resource_servers'], packages_root_directory)
+def install_irods_on_zone(zone, version_to_packages_map):
+    install_irods_on_zone_icat_server(zone['icat_server'], version_to_packages_map)
+    install_irods_on_zone_resource_servers(zone['resource_servers'], version_to_packages_map)
 
-def install_irods_on_zone_icat_server(icat_server, packages_root_directory):
+def install_irods_on_zone_icat_server(icat_server, version_to_packages_map):
     host_list = [icat_server['deployment_information']['ip_address']]
     complex_args = {
-        'icat_database_type': icat_server['database_config']['catalog_database_type'],
-        'icat_database_hostname': icat_server['database_config']['db_host'],
-        'irods_packages_root_directory': packages_root_directory,
+        'icat_server': icat_server,
+        'irods_packages_root_directory': version_to_packages_map[icat_server['version']['irods_version']],
     }
-    library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=host_list)
+    library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=host_list, sudo=True)
 
-def install_irods_on_zone_resource_servers(resource_servers, packages_root_directory):
+def install_irods_on_zone_resource_servers(resource_servers, version_to_packages_map):
     if len(resource_servers) > 0:
         host_list = [server['deployment_information']['ip_address'] for server in resource_servers]
         complex_args = {
             'icat_server_hostname': resource_servers[0]['server_config']['icat_host'],
-            'irods_packages_root_directory': packages_root_directory,
+            'irods_packages_root_directory': version_to_packages_map[resource_servers[0]['version']['irods_version']],
         }
         library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=host_list)
+
+def configure_federation_on_zone_bundle(zone_bundle):
+    for zone in zone_bundle['zones']:
+        configure_federation_on_zone(zone)
+
+def configure_federation_on_zone(zone):
+    host_list = [zone['icat_server']['deployment_information']['ip_address']]
+    complex_args = {
+        'federation': zone['icat_server']['server_config']['federation']
+    }
+    library.run_ansible(module_name='irods_configuration_federation', complex_args=complex_args, host_list=host_list, sudo=True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Interact with zone-bundles.json')
     parser.add_argument('--zone_bundle_input', type=str, required=True)
     parser.add_argument('--deployment_name', type=str, required=True)
-    parser.add_argument('--packages_root_directory', type=str, required=True)
+    parser.add_argument('--version_to_packages_map', type=str, required=True, nargs='+')
     parser.add_argument('--zone_bundle_output', type=str)
     args = parser.parse_args()
+
+    version_to_packages_map = {}
+    for i in range(0, len(args.version_to_packages_map), 2):
+        version_to_packages_map[args.version_to_packages_map[i]] = args.version_to_packages_map[i+1]
 
     if not args.zone_bundle_output:
         args.zone_bundle_output = os.path.abspath(args.deployment_name + '.json')
@@ -147,4 +169,4 @@ if __name__ == '__main__':
     library.register_log_handlers()
     library.convert_sigterm_to_exception()
 
-    deploy(zone_bundle, args.deployment_name, args.packages_root_directory, args.zone_bundle_output)
+    deploy(zone_bundle, args.deployment_name, version_to_packages_map, args.zone_bundle_output)
