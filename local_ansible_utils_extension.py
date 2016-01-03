@@ -22,8 +22,16 @@
 #
 #  get_irods_version() -> three-tuple of ints (e.g. (4, 1, 5))
 #   throws RuntimeError if no irods version files present
+#
+# Provides the following context managers:
+#
+#  euid_and_egid_set(name)
+#   sets euid and egid to that corresponding to name (per pwd)
 
+import contextlib
 import json
+import os
+import pwd
 import subprocess
 
 
@@ -136,3 +144,18 @@ def get_irods_version_from_bash():
         if e.errno != 2:
             raise
         return None
+
+@contextlib.contextmanager
+def euid_and_egid_set(name):
+    initial_euid = os.geteuid()
+    initial_egid = os.getegid()
+    pw = pwd.getpwnam(name)
+    euid = pw.pw_uid
+    egid = pw.pw_gid
+    os.setegid(egid)
+    os.seteuid(euid)
+    try:
+        yield
+    finally:
+        os.seteuid(initial_euid)
+        os.setegid(initial_egid)
