@@ -41,6 +41,7 @@ class GenericStrategy(object):
     __metaclass__ = abc.ABCMeta
     def __init__(self, module):
         self.module = module
+        self.module.debug_messages = {}
         self.irods_packages_root_directory = module.params['irods_packages_root_directory']
         self.icat_server = module.params['icat_server']
         self.icat_database_type = module.params['icat_server']['database_config']['catalog_database_type']
@@ -101,6 +102,51 @@ class GenericStrategy(object):
 
     def run_setup_script(self):
         def get_setup_input_template():
+            if os.path.exists('/var/lib/irods/scripts/setup_irods.py'):
+                preamble = '''\
+{service_account_name}
+{service_account_group}
+'''
+
+                server_portion = '''\
+{zone_name}
+{zone_port}
+{server_port_range_start}
+{server_port_range_end}
+{control_plane_port}
+{schema_validation_base_uri}
+{irods_admin_account_name}
+
+{zone_key}
+{negotiation_key}
+{control_plane_key}
+{irods_admin_account_password}
+{vault_directory}
+'''
+
+                if self.icat_server['database_config']['catalog_database_type'] == 'oracle':
+                    db_portion = '''\
+
+
+{database_hostname}
+{database_port}
+{database_name}
+{database_username}
+
+{database_password}
+'''
+                else:
+                    db_portion = '''\
+
+{database_hostname}
+{database_port}
+{database_name}
+{database_username}
+
+{database_password}
+'''
+                return preamble + db_portion + server_portion
+
             irods_version = get_irods_version()[0:2]
             if irods_version == (4, 0):
                 server_portion = '''\
@@ -197,7 +243,12 @@ class GenericStrategy(object):
         setup_values.update(setup_values_database)
         setup_input = get_setup_input_template().format(**setup_values)
         output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
-        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh 2>&1 | tee {0}; exit $PIPESTATUS'.format(output_log)], use_unsafe_shell=True, check_rc=True, data=setup_input)
+        def get_setup_script_location():
+            if os.path.exists('/var/lib/irods/packaging/setup_irods.sh'):
+                return '/var/lib/irods/packaging/setup_irods.sh'
+            return '/var/lib/irods/scripts/setup_irods.py'
+        self.module.debug_messages['setup_irods input'] = setup_input.split('\n')
+        self.module.run_command(['sudo', 'su', '-c', '{0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(get_setup_script_location(), output_log)], use_unsafe_shell=True, check_rc=True, data=setup_input)
 
     def post_install_configuration(self):
         pass
@@ -317,9 +368,9 @@ class DebianStrategy(GenericStrategy):
         self.module.run_command(['wget', 'http://people.renci.org/~jasonc/irods/oci.tar', '-O', tar_file], check_rc=True)
         tar_dir = os.path.expanduser('~/oci')
         os.mkdir(tar_dir)
-        self.module.run_command(['tar', '-xf', 'oci.tar', '-C', tar_dir], check_rc=True)
+        self.module.run_command(['tar', '-xf', tar_file, '-C', tar_dir], check_rc=True)
         install_os_packages(['alien', 'libaio1'])
-        self.module.run_command('sudo alien -i ./oci/*', use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('sudo alien -i {0}/*'.format(tar_dir), use_unsafe_shell=True, check_rc=True)
 
     def install_database(self):
         if self.icat_database_type == 'postgres':
@@ -418,6 +469,7 @@ def main():
     result = {}
     result['changed'] = True
     result['complex_args'] = module.params
+    result['debug_messages'] = module.debug_messages
 
     module.exit_json(**result)
 

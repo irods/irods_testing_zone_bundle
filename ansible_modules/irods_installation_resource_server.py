@@ -88,7 +88,11 @@ class GenericStrategy(object):
             f.write(setup_script_string)
         self.module.run_command(['sudo', 'mv', setup_script_input_file_initial, setup_script_input_file_final], check_rc=True)
         output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
-        self.module.run_command(['sudo', 'su', '-c', '/var/lib/irods/packaging/setup_irods.sh < {0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(setup_script_input_file_final, output_log)], use_unsafe_shell=True, check_rc=True)
+        def get_setup_script_location():
+            if os.path.exists('/var/lib/irods/packaging/setup_irods.sh'):
+                return '/var/lib/irods/packaging/setup_irods.sh'
+            return '/var/lib/irods/scripts/setup_irods.py'
+        self.module.run_command(['sudo', 'su', '-c', '{0} < {1} 2>&1 | tee {2}; exit $PIPESTATUS'.format(get_setup_script_location(), setup_script_input_file_final, output_log)], use_unsafe_shell=True, check_rc=True)
 
     def fix_403_setup_script(self):
         # https://github.com/irods/irods/issues/2498

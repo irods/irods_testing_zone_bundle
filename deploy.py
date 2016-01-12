@@ -9,9 +9,9 @@ import destroy
 import library
 
 
-def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None):
+def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None, destroy_vm_on_failure=True):
     zone_bundle_deployed = deploy_zone_bundle(zone_bundle_input, deployment_name)
-    with destroy.deployed_zone_bundle_manager(zone_bundle_deployed, only_on_exception=True):
+    with destroy.deployed_zone_bundle_manager(zone_bundle_deployed, on_regular_exit=False, on_exception=destroy_vm_on_failure):
         if zone_bundle_output_file:
             save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed)
         configure_zone_bundle_networking(zone_bundle_deployed)
@@ -154,6 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--deployment_name', type=str, required=True)
     parser.add_argument('--version_to_packages_map', type=str, required=True, nargs='+')
     parser.add_argument('--zone_bundle_output', type=str)
+    parser.add_argument('--leave-vm-on-failure', action='store_true')
     args = parser.parse_args()
 
     version_to_packages_map = {}
@@ -169,4 +170,4 @@ if __name__ == '__main__':
     library.register_log_handlers()
     library.convert_sigterm_to_exception()
 
-    deploy(zone_bundle, args.deployment_name, version_to_packages_map, args.zone_bundle_output)
+    deploy(zone_bundle, args.deployment_name, version_to_packages_map, args.zone_bundle_output, not args.leave_vm_on_failure)

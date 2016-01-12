@@ -106,7 +106,8 @@ class RedHatStrategy(GenericStrategy):
     def build_irods_packages(self):
         super(RedHatStrategy, self).build_irods_packages()
         if get_distribution_version_major() == '6':
-            self.module.run_command('sudo ./packaging/build.sh -r icat oracle > ./build/build_output_icat_oracle.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+            build_flags = '' if self.debug_build else '-r'
+            self.module.run_command('sudo ./packaging/build.sh {0} icat oracle > ./build/build_output_icat_oracle.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
 class DebianStrategy(GenericStrategy):
     @property
@@ -128,7 +129,8 @@ class DebianStrategy(GenericStrategy):
 
     def build_irods_packages(self):
         super(DebianStrategy, self).build_irods_packages()
-        self.module.run_command('sudo ./packaging/build.sh -r icat oracle > ./build/build_output_icat_oracle.log 2>&1', cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
+        build_flags = '' if self.debug_build else '-r'
+        self.module.run_command('sudo ./packaging/build.sh {0} icat oracle > ./build/build_output_icat_oracle.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
 class SuseStrategy(GenericStrategy):
     @property

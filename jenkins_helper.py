@@ -55,8 +55,9 @@ if __name__ == '__main__':
     zone_bundle_output = os.path.join(args.output_directory, 'deployed_zone_bundle.json')
     deployed_zone_bundle = deploy.deploy(zone_bundle, args.deployment_name, version_to_packages_map, zone_bundle_output)
     with destroy.deployed_zone_bundle_manager(deployed_zone_bundle):
-        for pd in args.upgrade_test:
-            upgrade.upgrade(deployed_zone_bundle, pd)
+        if args.upgrade_test:
+            for pd in args.upgrade_test:
+                upgrade.upgrade(deployed_zone_bundle, pd)
 
         if args.use_ssl:
             enable_ssl.enable_ssl(deployed_zone_bundle)

@@ -7,14 +7,15 @@ import os
 import library
 
 @contextlib.contextmanager
-def deployed_zone_bundle_manager(deployed_zone_bundle, only_on_exception=False):
+def deployed_zone_bundle_manager(deployed_zone_bundle, on_exception=True, on_regular_exit=True):
     try:
         yield
     except:
-        destroy(deployed_zone_bundle)
+        if on_exception:
+            destroy(deployed_zone_bundle)
         raise
     else:
-        if not only_on_exception:
+        if on_regular_exit:
             destroy(deployed_zone_bundle)
 
 def destroy(zone_bundle):
