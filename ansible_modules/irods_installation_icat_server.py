@@ -63,9 +63,14 @@ class GenericStrategy(object):
     def install_testing_dependencies(self):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
-        self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
-        self.module.run_command('sudo -E python get-pip.py', check_rc=True)
+        self.install_pip()
         self.module.run_command('sudo -E pip2 install --upgrade unittest-xml-reporting', check_rc=True)
+
+    def install_pip(self):
+        local_pip_git_dir = os.path.expanduser('~/pip')
+        self.module.run_command(['git', 'clone', 'https://github.com/pypa/pip.git', local_pip_git_dir], check_rc=True)
+        self.module.run_command(['git', 'checkout', '7.1.2'], cwd=local_pip_git_dir, check_rc=True)
+        self.module.run_command(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
 
     @property
     def testing_dependencies(self):
@@ -254,11 +259,12 @@ class GenericStrategy(object):
         pass
 
     def apply_zone_bundle(self):
-        with open('/etc/irods/server_config.json') as f:
-            d = json.load(f)
-        d['federation'] = self.icat_server['server_config']['federation']
-        with open('/etc/irods/server_config.json', 'w') as f:
-            json.dump(d, f, indent=4, sort_keys=True)
+        if get_irods_version() >= (4,1):
+            with open('/etc/irods/server_config.json') as f:
+                d = json.load(f)
+            d['federation'] = self.icat_server['server_config']['federation']
+            with open('/etc/irods/server_config.json', 'w') as f:
+                json.dump(d, f, indent=4, sort_keys=True)
 
     def install_mysql_pcre(self, dependencies, mysql_service):
         install_os_packages(dependencies)
@@ -358,6 +364,10 @@ ICAT =
             self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
 
 class DebianStrategy(GenericStrategy):
+    def install_pip(self):
+        install_os_packages(['python-setuptools'])
+        return super(DebianStrategy, self).install_pip()
+
     def install_database_plugin(self):
         if self.icat_database_type == 'oracle':
             self.install_oracle_dependencies()
@@ -466,11 +476,12 @@ def main():
     installer = IcatInstaller(module)
     installer.install()
 
-    result = {}
-    result['changed'] = True
-    result['complex_args'] = module.params
-    result['debug_messages'] = module.debug_messages
-
+    result = {
+        'changed': True,
+        'complex_args': module.params,
+        'debug_messages': module.debug_messages,
+        'irods_platform_string': get_irods_platform_string(),
+    }
     module.exit_json(**result)
 
 

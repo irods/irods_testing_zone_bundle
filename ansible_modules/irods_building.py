@@ -174,7 +174,7 @@ def main():
     result = {}
     result['changed'] = True
     result['complex_args'] = module.params
-
+    result['irods_platform_string'] = get_irods_platform_string()
     module.exit_json(**result)
 
 

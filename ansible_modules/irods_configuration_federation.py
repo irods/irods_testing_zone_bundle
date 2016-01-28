@@ -3,6 +3,7 @@
 def configure_federation(federation, module):
     for f in federation:
         module.run_command(['su', '-', 'irods', '-c', 'iadmin mkzone {0} remote {1}:{2}'.format(f['zone_name'], f['icat_host'], f['zone_port'])], check_rc=True)
+    module.run_command(['su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl restart'], check_rc=True) # reServer requires restart, possibly for server_config reload
 
 def main():
     module = AnsibleModule(

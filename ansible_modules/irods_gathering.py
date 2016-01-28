@@ -13,8 +13,8 @@ def makedirs_catch_preexisting(*args, **kwargs):
             raise
 
 def gather(output_root_directory):
-    subprocess.check_call('sudo chmod -R 777 /var/lib/irods/', shell=True)
-    subprocess.check_call('sudo chmod -R 777 /tmp/irods', shell=True)
+    change_permissions_if_exists('/var/lib/irods')
+    change_permissions_if_exists('/tmp/irods')
 
     output_directory = os.path.join(output_root_directory, socket.gethostname())
     makedirs_catch_preexisting(output_directory)
@@ -25,14 +25,14 @@ def gather(output_root_directory):
                              ('/var/lib/irods/tests/pydevtest/test-reports', all_files),
                              ('/var/lib/irods/scripts/test-reports', all_files),
                              ('/var/lib/irods/iRODS/server/test/bin', log_files),
-                             ('/var/lib/irods', _or(version_files, ini_files)),
+                             ('/var/lib/irods', or_(version_files, ini_files)),
                              ('/var/lib/irods/iRODS/installLogs', all_files),
                              ('/var/lib/irods/log', all_files),]
     for s, p in source_and_predicates:
         gathered_files += gather_files_in(s, output_directory, p)
     return gathered_files
 
-def _or(f0, f1):
+def or_(f0, f1):
     return lambda x: f0(x) or f1(x)
 
 def all_files(x):
@@ -60,6 +60,10 @@ def gather_files_in(source_directory, output_directory, predicate):
         if e.errno != 2: # No such file or directory
             raise
     return gathered_files
+
+def change_permissions_if_exists(directory):
+    if os.path.exists(directory):
+        subprocess.check_call(['sudo', 'chmod', '-R', '777', directory])
 
 def main():
     module = AnsibleModule(
