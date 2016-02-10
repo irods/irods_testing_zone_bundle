@@ -129,13 +129,21 @@ def install_irods_on_zone_icat_server(icat_server, version_to_packages_map):
     library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=host_list, sudo=True)
 
 def install_irods_on_zone_resource_servers(resource_servers, version_to_packages_map):
-    if len(resource_servers) > 0:
-        host_list = [server['deployment_information']['ip_address'] for server in resource_servers]
-        complex_args = {
-            'icat_server_hostname': resource_servers[0]['server_config']['icat_host'],
-            'irods_packages_root_directory': version_to_packages_map[resource_servers[0]['version']['irods_version']],
-        }
-        library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=host_list)
+    n = len(resource_servers)
+    if n > 0:
+        proc_pool = library.RecursiveMultiprocessingPool(n)
+        proc_pool_results = [proc_pool.apply_async(install_irods_on_zone_resource_server,
+                                                   (resource_server, version_to_packages_map))
+                             for resource_server in resource_servers]
+        [result.get() for result in proc_pool_results]
+
+def install_irods_on_zone_resource_server(resource_server, version_to_packages_map):
+    host_list = [resource_server['deployment_information']['ip_address']]
+    complex_args = {
+        'resource_server': resource_server,
+        'irods_packages_root_directory': version_to_packages_map[resource_server['version']['irods_version']],
+    }
+    library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=host_list)
 
 def configure_federation_on_zone_bundle(zone_bundle):
     for zone in zone_bundle['zones']:

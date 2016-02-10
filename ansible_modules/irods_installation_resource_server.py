@@ -47,7 +47,7 @@ class GenericStrategy(object):
     def __init__(self, module):
         self.module = module
         self.irods_packages_root_directory = module.params['irods_packages_root_directory']
-        self.icat_server_hostname = module.params['icat_server_hostname']
+        self.resource_server = module.params['resource_server']
 
     @property
     def testing_dependencies(self):
@@ -77,22 +77,76 @@ class GenericStrategy(object):
     def run_setup_script(self):
         if get_irods_version() < (4, 1):
             self.fix_403_setup_script()
-            setup_script_inputs = ['']*8 + ['rods', '', self.icat_server_hostname, 'tempZone', '', 'rods']
-            setup_script_string = '\n'.join(setup_script_inputs) + '\n'
+            setup_input_template = '''\
+{service_account_name}
+{service_account_group}
+{zone_port}
+{server_port_range_start}
+{server_port_range_end}
+{vault_directory}
+{zone_key}
+{negotiation_key}
+{irods_admin_account_name}
+
+{icat_host}
+{zone_name}
+
+{irods_admin_account_password}
+
+'''
         else:
-            setup_script_inputs = ['']*13 + [self.icat_server_hostname, 'tempZone', '', 'rods']
-            setup_script_string = '\n'.join(setup_script_inputs) + '\n'
-        setup_script_input_file_initial = '/home/irodsbuild/setup_irods.input'
-        setup_script_input_file_final = '/var/lib/irods/iRODS/installLogs/setup_irods.input'
-        with open(setup_script_input_file_initial, 'w') as f:
-            f.write(setup_script_string)
-        self.module.run_command(['sudo', 'mv', setup_script_input_file_initial, setup_script_input_file_final], check_rc=True)
+            setup_input_template = '''\
+{service_account_name}
+{service_account_group}
+{zone_port}
+{server_port_range_start}
+{server_port_range_end}
+{vault_directory}
+{zone_key}
+{negotiation_key}
+{control_plane_port}
+{control_plane_key}
+{schema_validation_base_uri}
+{irods_admin_account_name}
+
+{icat_host}
+{zone_name}
+
+{irods_admin_account_password}
+
+'''
+
+        setup_input_values = {
+            'service_account_name': '',
+            'service_account_group': '',
+            'zone_name': self.resource_server['server_config']['zone_name'],
+            'zone_port': self.resource_server['server_config']['zone_port'],
+            'server_port_range_start': self.resource_server['server_config']['server_port_range_start'],
+            'server_port_range_end': self.resource_server['server_config']['server_port_range_end'],
+            'vault_directory': '',
+            'zone_key': self.resource_server['server_config']['zone_key'],
+            'negotiation_key': self.resource_server['server_config']['negotiation_key'],
+            'control_plane_port': self.resource_server['server_config']['server_control_plane_port'],
+            'control_plane_key': self.resource_server['server_config']['server_control_plane_key'],
+            'schema_validation_base_uri': self.resource_server['server_config']['schema_validation_base_uri'],
+            'irods_admin_account_name':  self.resource_server['server_config']['zone_user'],
+            'irods_admin_account_password': 'rods',
+            'icat_host': self.resource_server['server_config']['icat_host']
+        }
+
+        setup_input = setup_input_template.format(**setup_input_values)
+
+        #setup_script_input_file_initial = '/home/irodsbuild/setup_irods.input'
+        #setup_script_input_file_final = '/var/lib/irods/iRODS/installLogs/setup_irods.input'
+        #with open(setup_script_input_file_initial, 'w') as f:
+        #    f.write(setup_script_string)
+        #self.module.run_command(['sudo', 'mv', setup_script_input_file_initial, setup_script_input_file_final], check_rc=True)
         output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
         def get_setup_script_location():
             if os.path.exists('/var/lib/irods/packaging/setup_irods.sh'):
                 return '/var/lib/irods/packaging/setup_irods.sh'
             return '/var/lib/irods/scripts/setup_irods.py'
-        self.module.run_command(['sudo', 'su', '-c', '{0} < {1} 2>&1 | tee {2}; exit $PIPESTATUS'.format(get_setup_script_location(), setup_script_input_file_final, output_log)], use_unsafe_shell=True, check_rc=True)
+        self.module.run_command(['sudo', 'su', '-c', '{0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(get_setup_script_location(), output_log)], data=setup_input, use_unsafe_shell=True, check_rc=True)
 
     def fix_403_setup_script(self):
         # https://github.com/irods/irods/issues/2498
@@ -145,7 +199,7 @@ def main():
     module = AnsibleModule(
         argument_spec = dict(
             irods_packages_root_directory=dict(type='str', required=True),
-            icat_server_hostname=dict(type='str', required=True),
+            resource_server=dict(type='dict', required=True),
         ),
         supports_check_mode=False,
     )

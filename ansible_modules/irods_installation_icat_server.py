@@ -265,6 +265,10 @@ class GenericStrategy(object):
             d['federation'] = self.icat_server['server_config']['federation']
             with open('/etc/irods/server_config.json', 'w') as f:
                 json.dump(d, f, indent=4, sort_keys=True)
+        elif get_irods_version() >= (4,0):
+            with open('/etc/irods/server.config', 'a') as f:
+                for e in self.icat_server['server_config']['federation']:
+                    f.write('RemoteZoneSID {0}-{1}\n'.format(e['zone_name'], e['zone_key']))
 
     def install_mysql_pcre(self, dependencies, mysql_service):
         install_os_packages(dependencies)
