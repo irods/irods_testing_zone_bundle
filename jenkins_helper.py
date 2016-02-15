@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--zone_bundle_input', type=str, required=True)
     parser.add_argument('--deployment_name', type=str, required=True)
     parser.add_argument('--version_to_packages_map', type=str, required=True, nargs='+')
-    parser.add_argument('--test_type', type=str, required=True, choices=['standalone_icat', 'topology_icat', 'topology_resource'])
+    parser.add_argument('--test_type', type=str, required=True, choices=['standalone_icat', 'topology_icat', 'topology_resource', 'federation'])
     parser.add_argument('--use_ssl', action='store_true')
     parser.add_argument('--upgrade_test', nargs='+')
     parser.add_argument('--output_directory', type=str, required=True)

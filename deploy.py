@@ -12,10 +12,10 @@ import library
 def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None, destroy_vm_on_failure=True):
     zone_bundle_deployed = deploy_zone_bundle(zone_bundle_input, deployment_name)
     with destroy.deployed_zone_bundle_manager(zone_bundle_deployed, on_regular_exit=False, on_exception=destroy_vm_on_failure):
-        if zone_bundle_output_file:
-            save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed)
         configure_zone_bundle_networking(zone_bundle_deployed)
         install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map)
+        if zone_bundle_output_file:
+            save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed)
         configure_federation_on_zone_bundle(zone_bundle_deployed)
     return zone_bundle_deployed
 
@@ -114,19 +114,26 @@ def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map):
     proc_pool_results = [proc_pool.apply_async(install_irods_on_zone,
                                                (zone, version_to_packages_map))
                          for zone in zone_bundle['zones']]
-    [result.get() for result in proc_pool_results]
+    zone_bundle['zones'] = [result.get() for result in proc_pool_results]
 
 def install_irods_on_zone(zone, version_to_packages_map):
-    install_irods_on_zone_icat_server(zone['icat_server'], version_to_packages_map)
-    install_irods_on_zone_resource_servers(zone['resource_servers'], version_to_packages_map)
+    icat_server = install_irods_on_zone_icat_server(zone['icat_server'], version_to_packages_map)
+    resource_servers = install_irods_on_zone_resource_servers(zone['resource_servers'], version_to_packages_map)
+    zone['icat_server'] = icat_server
+    zone['resource_servers'] = resource_servers
+    return zone
 
 def install_irods_on_zone_icat_server(icat_server, version_to_packages_map):
-    host_list = [icat_server['deployment_information']['ip_address']]
+    icat_ip = icat_server['deployment_information']['ip_address']
     complex_args = {
         'icat_server': icat_server,
         'irods_packages_root_directory': version_to_packages_map[icat_server['version']['irods_version']],
     }
-    library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=host_list, sudo=True)
+    data = library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=[icat_ip], sudo=True)
+    if icat_server['version']['irods_version'] == 'deployment-determined':
+        icat_server['version']['irods_version'] = '.'.join(map(str, data['contacted'][icat_ip]['irods_version']))
+
+    return icat_server
 
 def install_irods_on_zone_resource_servers(resource_servers, version_to_packages_map):
     n = len(resource_servers)
@@ -135,15 +142,20 @@ def install_irods_on_zone_resource_servers(resource_servers, version_to_packages
         proc_pool_results = [proc_pool.apply_async(install_irods_on_zone_resource_server,
                                                    (resource_server, version_to_packages_map))
                              for resource_server in resource_servers]
-        [result.get() for result in proc_pool_results]
+        resource_servers = [result.get() for result in proc_pool_results]
+    return resource_servers
 
 def install_irods_on_zone_resource_server(resource_server, version_to_packages_map):
-    host_list = [resource_server['deployment_information']['ip_address']]
+    resource_ip = resource_server['deployment_information']['ip_address']
     complex_args = {
         'resource_server': resource_server,
         'irods_packages_root_directory': version_to_packages_map[resource_server['version']['irods_version']],
     }
-    library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=host_list)
+    data = library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=[resource_ip])
+
+    if resource_server['version']['irods_version'] == 'deployment-determined':
+        resource_server['version']['irods_version'] = '.'.join(map(str, data['contacted'][resource_ip]['irods_version']))
+    return resource_server
 
 def configure_federation_on_zone_bundle(zone_bundle):
     for zone in zone_bundle['zones']:

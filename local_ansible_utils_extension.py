@@ -62,6 +62,7 @@ stderr: {4}
     return p.returncode, out, err
 
 def install_os_packages_apt(packages):
+    subprocess_get_output(['sudo', 'apt-get', 'clean'], check_rc=True)
     subprocess_get_output(['sudo', 'apt-get', 'update'], check_rc=True)
     args = ['sudo', 'apt-get', 'install', '-y'] + packages
     subprocess_get_output(args, check_rc=True)
@@ -90,6 +91,7 @@ def install_os_packages(packages):
 def install_os_packages_from_files_apt(files):
     args = ['sudo', 'dpkg', '-i'] + files
     subprocess_get_output(args) # no check_rc, missing deps return code 1
+    subprocess_get_output(['sudo', 'apt-get', 'clean'], check_rc=True)
     subprocess_get_output(['sudo', 'apt-get', 'update'], check_rc=True)
     subprocess_get_output(['sudo', 'apt-get', 'install', '-yf'], check_rc=True)
 

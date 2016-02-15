@@ -64,7 +64,7 @@ class GenericStrategy(object):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
         self.install_pip()
-        self.module.run_command('sudo -E pip2 install --upgrade unittest-xml-reporting', check_rc=True)
+        self.module.run_command(['sudo', '-E', 'pip2', 'install', '--upgrade', 'unittest-xml-reporting==1.14.0'], check_rc=True)
 
     def install_pip(self):
         local_pip_git_dir = os.path.expanduser('~/pip')
@@ -74,7 +74,7 @@ class GenericStrategy(object):
 
     @property
     def testing_dependencies(self):
-        return ['bonnie++', 'fuse', 'git']
+        return ['bonnie++', 'fuse', 'git', 'python-psutil'] # python-psutil for federation tests, 4.0.3 package doesn't req it
 
     def install_icat(self):
         icat_package_basename = filter(lambda x:'irods-icat' in x, os.listdir(self.irods_packages_directory))[0]
@@ -485,6 +485,7 @@ def main():
         'complex_args': module.params,
         'debug_messages': module.debug_messages,
         'irods_platform_string': get_irods_platform_string(),
+        'irods_version': get_irods_version(),
     }
     module.exit_json(**result)
 

@@ -207,9 +207,11 @@ def main():
     installer = ResourceInstaller(module)
     installer.install()
 
-    result = {}
-    result['changed'] = True
-    result['complex_args'] = module.params
+    result = {
+        'changed': True,
+        'complex_args': module.params,
+        'irods_version': get_irods_version(),
+    }
 
     module.exit_json(**result)
 

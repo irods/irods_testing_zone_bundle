@@ -10,7 +10,8 @@ def gather(zone_bundle, output_root_directory):
     gather_zone_bundle(zone_bundle, output_root_directory)
 
 def gather_zone_bundle(zone_bundle, output_root_directory):
-    gather_zone(zone_bundle['zones'][0], output_root_directory)
+    for zone in zone_bundle['zones']:
+        gather_zone(zone, output_root_directory)
 
 def gather_zone(zone, output_root_directory):
     servers = library.get_servers_from_zone(zone)
