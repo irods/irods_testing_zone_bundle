@@ -67,7 +67,7 @@ class GenericStrategy(object):
             install_os_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
-        self.module.run_command('sudo -E pip2 install --upgrade unittest-xml-reporting', check_rc=True)
+        self.module.run_command(['sudo', '-E', 'pip2', 'install', '--upgrade', 'unittest-xml-reporting==1.14.0'], check_rc=True)
 
     def install_resource(self):
         resource_package_basename = filter(lambda x:'irods-resource' in x, os.listdir(self.irods_packages_directory))[0]
@@ -75,7 +75,26 @@ class GenericStrategy(object):
         install_os_packages_from_files([resource_package])
 
     def run_setup_script(self):
-        if get_irods_version() < (4, 1):
+        if os.path.exists('/var/lib/irods/scripts/setup_irods.py'):
+            setup_input_template = '''\
+{service_account_name}
+{service_account_group}
+{zone_name}
+{icat_host}
+{zone_port}
+{server_port_range_start}
+{server_port_range_end}
+{control_plane_port}
+{schema_validation_base_uri}
+{irods_admin_account_name}
+yes
+{zone_key}
+{negotiation_key}
+{control_plane_key}
+{irods_admin_account_password}
+{vault_directory}
+'''
+        elif get_irods_version() < (4, 1):
             self.fix_403_setup_script()
             setup_input_template = '''\
 {service_account_name}

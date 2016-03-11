@@ -12,12 +12,14 @@ import library
 def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None, destroy_vm_on_failure=True):
     zone_bundle_deployed = deploy_zone_bundle(zone_bundle_input, deployment_name)
     with destroy.deployed_zone_bundle_manager(zone_bundle_deployed, on_regular_exit=False, on_exception=destroy_vm_on_failure):
-        configure_zone_bundle_networking(zone_bundle_deployed)
-        install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map)
         if zone_bundle_output_file:
-            save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed)
-        configure_federation_on_zone_bundle(zone_bundle_deployed)
-    return zone_bundle_deployed
+            save_zone_bundle(zone_bundle_output_file, zone_bundle_deployed)
+        configure_zone_bundle_networking(zone_bundle_deployed)
+        zone_bundle_deployed_updated = install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map)
+        if zone_bundle_output_file:
+            save_zone_bundle(zone_bundle_output_file, zone_bundle_deployed_updated)
+        configure_federation_on_zone_bundle(zone_bundle_deployed_updated)
+    return zone_bundle_deployed_updated
 
 def deploy_zone_bundle(zone_bundle_input, deployment_name):
     zone_bundle = copy.deepcopy(zone_bundle_input)
@@ -65,10 +67,10 @@ def deploy_zone_set_server_ip(zone_input, deployment_name):
         database_config['deployment_information']['ip_address'] = db_ip_address
     return zone
 
-def save_zone_bundle_deployed(zone_bundle_output_file, zone_bundle_deployed):
+def save_zone_bundle(zone_bundle_output_file, zone_bundle):
     library.makedirs_catch_preexisting(os.path.dirname(os.path.abspath(zone_bundle_output_file)))
     with open(zone_bundle_output_file, 'w') as f:
-        json.dump(zone_bundle_deployed, f, indent=4)
+        json.dump(zone_bundle, f, indent=4)
 
 def configure_zone_bundle_networking(zone_bundle):
     servers = library.get_servers_from_zone_bundle(zone_bundle)
@@ -114,7 +116,9 @@ def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map):
     proc_pool_results = [proc_pool.apply_async(install_irods_on_zone,
                                                (zone, version_to_packages_map))
                          for zone in zone_bundle['zones']]
-    zone_bundle['zones'] = [result.get() for result in proc_pool_results]
+    zone_bundle_updated = copy.deepcopy(zone_bundle)
+    zone_bundle_updated['zones'] = [result.get() for result in proc_pool_results]
+    return zone_bundle_updated
 
 def install_irods_on_zone(zone, version_to_packages_map):
     icat_server = install_irods_on_zone_icat_server(zone['icat_server'], version_to_packages_map)
@@ -124,14 +128,15 @@ def install_irods_on_zone(zone, version_to_packages_map):
     return zone
 
 def install_irods_on_zone_icat_server(icat_server, version_to_packages_map):
-    icat_ip = icat_server['deployment_information']['ip_address']
-    complex_args = {
-        'icat_server': icat_server,
-        'irods_packages_root_directory': version_to_packages_map[icat_server['version']['irods_version']],
-    }
-    data = library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=[icat_ip], sudo=True)
-    if icat_server['version']['irods_version'] == 'deployment-determined':
-        icat_server['version']['irods_version'] = '.'.join(map(str, data['contacted'][icat_ip]['irods_version']))
+    if icat_server['version']['irods_version'] != '3.3.1':
+        icat_ip = icat_server['deployment_information']['ip_address']
+        complex_args = {
+            'icat_server': icat_server,
+            'irods_packages_root_directory': version_to_packages_map[icat_server['version']['irods_version']],
+        }
+        data = library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=[icat_ip], sudo=True)
+        if icat_server['version']['irods_version'] == 'deployment-determined':
+            icat_server['version']['irods_version'] = '.'.join(map(str, data['contacted'][icat_ip]['irods_version']))
 
     return icat_server
 
@@ -158,13 +163,18 @@ def install_irods_on_zone_resource_server(resource_server, version_to_packages_m
     return resource_server
 
 def configure_federation_on_zone_bundle(zone_bundle):
+    disable_client_server_negotiation = False
     for zone in zone_bundle['zones']:
-        configure_federation_on_zone(zone)
+        if zone['icat_server']['version']['irods_version'] == '3.3.1':
+            disable_client_server_negotiation = True
+    for zone in zone_bundle['zones']:
+        configure_federation_on_zone(zone, disable_client_server_negotiation)
 
-def configure_federation_on_zone(zone):
+def configure_federation_on_zone(zone, disable_client_server_negotiation):
     host_list = [zone['icat_server']['deployment_information']['ip_address']]
     complex_args = {
-        'federation': zone['icat_server']['server_config']['federation']
+        'federation': zone['icat_server']['server_config']['federation'],
+        'disable_client_server_negotiation': disable_client_server_negotiation,
     }
     library.run_ansible(module_name='irods_configuration_federation', complex_args=complex_args, host_list=host_list, sudo=True)
 

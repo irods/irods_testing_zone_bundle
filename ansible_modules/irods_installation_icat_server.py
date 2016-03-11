@@ -132,13 +132,13 @@ class GenericStrategy(object):
                 if self.icat_server['database_config']['catalog_database_type'] == 'oracle':
                     db_portion = '''\
 
-
 {database_hostname}
 {database_port}
 {database_name}
 {database_username}
 
 {database_password}
+
 '''
                 else:
                     db_portion = '''\
@@ -149,6 +149,7 @@ class GenericStrategy(object):
 {database_username}
 
 {database_password}
+
 '''
                 return preamble + db_portion + server_portion
 
@@ -231,20 +232,21 @@ class GenericStrategy(object):
             'irods_admin_account_name':  self.icat_server['server_config']['zone_user'],
             'irods_admin_account_password': 'rods',
         }
+
+        setup_values_database = {
+            'database_hostname': self.icat_server['database_config']['db_host'],
+            'database_name': self.icat_server['database_config']['db_name'],
+            'database_password': self.icat_server['database_config']['db_password'],
+            'database_port': self.icat_server['database_config']['db_port'],
+            'database_username': self.icat_server['database_config']['db_username'],
+        }
+
         if self.icat_server['database_config']['catalog_database_type'] == 'oracle':
-            setup_values_database = {
+            setup_values_database.update({
+                'database_connection_string': self.icat_server['database_config']['db_connection_string'],
                 'oracle_home': '/usr/lib/oracle/11.2/client64',
-                'database_connection_string': self.icat_server['database_config']['db_username'],
-                'database_password': self.icat_server['database_config']['db_password'],
-            }
-        else:
-            setup_values_database = {
-                'database_hostname': self.icat_server['database_config']['db_host'],
-                'database_port': self.icat_server['database_config']['db_port'],
-                'database_name': self.icat_server['database_config']['db_name'],
-                'database_username': self.icat_server['database_config']['db_username'],
-                'database_password': self.icat_server['database_config']['db_password'],
-            }
+            })
+
         setup_values.update(setup_values_database)
         setup_input = get_setup_input_template().format(**setup_values)
         output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'

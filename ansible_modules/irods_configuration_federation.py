@@ -1,19 +1,29 @@
 #!/usr/bin/python
+import json
 
-def configure_federation(federation, module):
+
+def configure_federation(federation, disable_client_server_negotiation, module):
     for f in federation:
         module.run_command(['su', '-', 'irods', '-c', 'iadmin mkzone {0} remote {1}:{2}'.format(f['zone_name'], f['icat_host'], f['zone_port'])], check_rc=True)
-    module.run_command(['su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl restart'], check_rc=True) # reServer requires restart, possibly for server_config reload
+    if disable_client_server_negotiation and get_irods_version() >= (4, 1):
+        with open('/var/lib/irods/.irods/irods_environment.json') as f:
+            d = json.load(f)
+        d['irods_client_server_negotiation'] = 'off'
+        with open('/var/lib/irods/.irods/irods_environment.json', 'w') as f:
+            json.dump(d, f, indent=4, sort_keys=True)
+    if federation:
+        module.run_command(['su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl restart'], check_rc=True) # reServer requires restart, possibly for server_config reload
 
 def main():
     module = AnsibleModule(
         argument_spec = dict(
             federation=dict(type='list', required=True),
+            disable_client_server_negotiation=dict(type='bool', required=True),
         ),
         supports_check_mode=False,
     )
 
-    configure_federation(module.params['federation'], module)
+    configure_federation(module.params['federation'], module.params['disable_client_server_negotiation'], module)
     result = {}
     result['changed'] = True
     result['complex_args'] = module.params

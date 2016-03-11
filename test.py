@@ -63,26 +63,56 @@ def copy_testing_code(source_zone, target_zone):
     ip_address_source = source_zone['icat_server']['deployment_information']['ip_address']
     ip_address_dest = target_zone['icat_server']['deployment_information']['ip_address']
     temp_dir = tempfile.mkdtemp()
-    def get_complex_args_fetch(filename):
-        return {
-            'dest': temp_dir + '/',
-            'flat': 'yes',
-            'src': os.path.join('/var/lib/irods/tests/pydevtest', filename),
-            'fail_on_missing': 'yes',
-        }
-
-    def get_complex_args_copy(filename):
-        return {
-            'dest': os.path.join('/var/lib/irods/tests/pydevtest', filename),
-            'src': os.path.join(temp_dir, filename),
-            'owner': 'irods',
-            'group': 'irods',
-        }
-
     with directory_deleter(temp_dir):
-        for f in ['run_tests.py', 'configuration.py', 'test_federation.py', 'lib.py', 'test_framework_configuration.json']:
-            library.run_ansible(module_name='fetch', complex_args=get_complex_args_fetch(f), host_list=[ip_address_source], sudo=True)
-            library.run_ansible(module_name='copy', complex_args=get_complex_args_copy(f), host_list=[ip_address_dest], sudo=True)
+        def get_complex_args_fetch(dirname, filename):
+            return {
+                'dest': temp_dir + '/',
+                'flat': 'yes',
+                'src': os.path.join(dirname, filename),
+                'fail_on_missing': 'yes',
+            }
+
+        def get_complex_args_copy(filename):
+            return {
+                'dest': os.path.join('/var/lib/irods/tests/pydevtest', filename),
+                'src': os.path.join(temp_dir, filename),
+            }
+
+        def get_complex_args_synchronize_pull():
+            return {
+                'recursive': 'yes',
+                'src': '/var/lib/irods/scripts',
+                'dest': temp_dir + '/',
+                'mode': 'pull',
+            }
+
+        def get_complex_args_synchronize_push():
+            return {
+                'recursive': 'yes',
+                'src': temp_dir + '/scripts',
+                'dest': '/var/lib/irods/',
+                'mode': 'push',
+            }
+
+        def get_complex_args_file():
+            return {
+                'mode': 0777,
+                'path': '/var/lib/irods/scripts',
+                'recurse': 'yes',
+                'owner': 'irods',
+                'group': 'irods',
+            }
+
+        data = library.run_ansible(module_name='stat', complex_args={'path':'/var/lib/irods/scripts/run_tests.py'}, host_list=[ip_address_source], sudo=True)
+        if data['contacted'][ip_address_source]['stat']['exists']:
+            library.run_ansible(module_name='synchronize', complex_args=get_complex_args_synchronize_pull(), host_list=[ip_address_source], sudo=True)
+            library.run_ansible(module_name='synchronize', complex_args=get_complex_args_synchronize_push(), host_list=[ip_address_dest], sudo=True)
+            library.run_ansible(module_name='file', complex_args=get_complex_args_file(), host_list=[ip_address_dest], sudo=True)
+        else:
+            library.run_ansible(module_name='file', complex_args={'mode':'u=rwx,g=rwx,o=rwx', 'path':'/var/lib/irods/tests/pydevtest', 'state':'directory'}, host_list=[ip_address_dest], sudo=True)
+            for f in ['run_tests.py', 'configuration.py', 'test_federation.py', 'lib.py', 'test_framework_configuration.json']:
+                library.run_ansible(module_name='fetch', complex_args=get_complex_args_fetch('/var/lib/irods/tests/pydevtest', f), host_list=[ip_address_source], sudo=True)
+                library.run_ansible(module_name='copy', complex_args=get_complex_args_copy(f), host_list=[ip_address_dest], sudo=True)
 
 def get_first_zone_irods_version(zone_bundle):
     icat_ip = zone_bundle['zones'][0]['icat_server']['deployment_information']['ip_address']

@@ -9,7 +9,8 @@ import subprocess
 
 
 def run_tests(test_type, use_ssl, output_directory, federation_args):
-    create_irodsauthuser_account()
+    if test_type != 'federation':
+        create_irodsauthuser_account()
 
     test_type_dict = {
         'standalone_icat': '--run_python_suite --include_auth_tests',
@@ -20,6 +21,12 @@ def run_tests(test_type, use_ssl, output_directory, federation_args):
     test_type_argument = test_type_dict[test_type]
 
     test_output_file = '/var/lib/irods/tests/test_output.txt'
+    if test_type == 'federation':
+        if get_irods_version() < (4, 0): # we are running copied code on an old zone
+            subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'mkdir /var/lib/irods/tests'], check_rc=True)
+        if get_irods_version() < (4, 2): # we are running copied code on an old zone
+            subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'mkdir /var/lib/irods/log'], check_rc=True)
+            subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'echo "" > /var/lib/irods/scripts/irods/database_connect.py'], check_rc=True)
 
     ssl_string = '--use_ssl' if use_ssl else ''
     devtesty_string = '--run_devtesty' if not use_ssl and not test_type == 'federation' else ''
@@ -47,8 +54,8 @@ def create_irodsauthuser_account():
         raise RuntimeError('failed to change {0} password, return code: {1}'.format(name, p.returncode))
 
 def get_authuser_name_and_password():
-    config_locations = ['/var/lib/irods/tests/pydevtest/test_framework_configuration.json',
-                        '/var/lib/irods/tests/test_framework_configuration.json',]
+    config_locations = ['/var/lib/irods/tests/test_framework_configuration.json',
+                        '/var/lib/irods/tests/pydevtest/test_framework_configuration.json',]
     for l in config_locations:
         if os.path.exists(l):
             config_file = l
@@ -66,8 +73,8 @@ def get_authuser_name_and_password():
         raise
 
 def get_test_runner_directory():
-    test_directories = ['/var/lib/irods/tests/pydevtest',
-                      '/var/lib/irods/scripts',]
+    test_directories = ['/var/lib/irods/scripts',
+                        '/var/lib/irods/tests/pydevtest',]
     for l in test_directories:
         if os.path.exists(os.path.join(l, 'run_tests.py')):
             return l
@@ -96,4 +103,5 @@ def main():
 
 
 from ansible.module_utils.basic import *
+from ansible.module_utils.local_ansible_utils_extension import *
 main()

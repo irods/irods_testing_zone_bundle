@@ -10,6 +10,7 @@ import yaml
 
 import ansible.constants
 ansible.constants.HOST_KEY_CHECKING = False
+ansible.constants.PARAMIKO_RECORD_HOST_KEYS = False
 import ansible.inventory
 import ansible.runner
 
@@ -30,6 +31,9 @@ class NoDaemonProcess(multiprocessing.Process):
 
 class RecursiveMultiprocessingPool(multiprocessing.pool.Pool):
     Process = NoDaemonProcess
+
+class IrodsAnsibleException(Exception):
+    pass
 
 def get_servers_from_zone_bundle(zone_bundle):
     servers = []
@@ -99,7 +103,7 @@ def run_ansible(host_list, additional_modules_directories=[], **kwargs):
     data = r.run()
     if ansible_run_failed(data):
         logger.error(format_ansible_output(data))
-        raise RuntimeError('ansible failed')
+        raise IrodsAnsibleException('ansible failed')
     logger.info(format_ansible_output(data))
     return data
 
