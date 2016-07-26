@@ -70,15 +70,25 @@ class GenericStrategy(object):
         self.module.run_command(['sudo', '-E', 'pip2', 'install', '--upgrade', 'unittest-xml-reporting==1.14.0'], check_rc=True)
 
     def install_resource(self):
-        resource_package_basename = filter(lambda x:'irods-resource' in x, os.listdir(self.irods_packages_directory))[0]
-        resource_package = os.path.join(self.irods_packages_directory, resource_package_basename)
-        install_os_packages_from_files([resource_package])
+        install_irods_repository()
+        resource_package_basename = filter(lambda x:'irods-resource' in x or 'irods-server' in x, os.listdir(self.irods_packages_directory))[0]
+        if 'irods-resource' in resource_package_basename:
+            resource_package = os.path.join(self.irods_packages_directory, resource_package_basename)
+            install_os_packages_from_files([resource_package])
+        elif 'irods-server' in resource_package_basename:
+            server_package = os.path.join(self.irods_packages_directory, resource_package_basename)
+            runtime_package = server_package.replace('irods-server', 'irods-runtime')
+            icommands_package = server_package.replace('irods-server', 'irods-icommands')
+            install_os_packages_from_files([runtime_package, icommands_package, server_package])
+        else:
+            raise RuntimeError('unhandled package name')
 
     def run_setup_script(self):
         if os.path.exists('/var/lib/irods/scripts/setup_irods.py'):
             setup_input_template = '''\
 {service_account_name}
 {service_account_group}
+2
 {zone_name}
 {icat_host}
 {zone_port}
@@ -155,16 +165,15 @@ yes
 
         setup_input = setup_input_template.format(**setup_input_values)
 
-        #setup_script_input_file_initial = '/home/irodsbuild/setup_irods.input'
-        #setup_script_input_file_final = '/var/lib/irods/iRODS/installLogs/setup_irods.input'
-        #with open(setup_script_input_file_initial, 'w') as f:
-        #    f.write(setup_script_string)
-        #self.module.run_command(['sudo', 'mv', setup_script_input_file_initial, setup_script_input_file_final], check_rc=True)
-        output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
+        if get_irods_version()[0:2] < (4, 2):
+            output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
+        else:
+            output_log = '/var/lib/irods/log/setup_irods.output'
+
         def get_setup_script_location():
             if os.path.exists('/var/lib/irods/packaging/setup_irods.sh'):
                 return '/var/lib/irods/packaging/setup_irods.sh'
-            return '/var/lib/irods/scripts/setup_irods.py'
+            return 'python /var/lib/irods/scripts/setup_irods.py'
         self.module.run_command(['sudo', 'su', '-c', '{0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(get_setup_script_location(), output_log)], data=setup_input, use_unsafe_shell=True, check_rc=True)
 
     def fix_403_setup_script(self):

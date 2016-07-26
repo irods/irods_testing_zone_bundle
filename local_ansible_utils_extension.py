@@ -33,6 +33,7 @@ import json
 import os
 import pwd
 import subprocess
+import tempfile
 
 
 def get_distribution_version_major():
@@ -61,18 +62,26 @@ stderr: {4}
 '''.format(args, kwargs, p.returncode, out, err))
     return p.returncode, out, err
 
+def install_pip():
+    local_pip_git_dir = tempfile.mkdtemp()
+    git_clone('https://github.com/pypa/pip.git', '7.1.2', local_pip_git_dir)
+    subprocess_get_output(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
+
+def pip_install_irods_ci_helpers():
+    subprocess_get_output(['sudo', 'pip', 'install', 'git+file:///projects/irods/vsphere-testing/irods_ci_helpers'], check_rc=True)
+
 def install_os_packages_apt(packages):
     subprocess_get_output(['sudo', 'apt-get', 'clean'], check_rc=True)
     subprocess_get_output(['sudo', 'apt-get', 'update'], check_rc=True)
-    args = ['sudo', 'apt-get', 'install', '-y'] + packages
+    args = ['sudo', 'apt-get', 'install', '-y'] + list(packages)
     subprocess_get_output(args, check_rc=True)
 
 def install_os_packages_yum(packages):
-    args = ['sudo', 'yum', 'install', '-y'] + packages
+    args = ['sudo', 'yum', 'install', '-y'] + list(packages)
     subprocess_get_output(args, check_rc=True)
 
 def install_os_packages_zypper(packages):
-    args = ['sudo', 'zypper', '--non-interactive', 'install'] + packages
+    args = ['sudo', 'zypper', '--non-interactive', 'install'] + list(packages)
     subprocess_get_output(args, check_rc=True)
 
 def install_os_packages(packages):
@@ -89,14 +98,14 @@ def install_os_packages(packages):
         raise NotImplementedError('install_os_packages() for [{0}]'.format(get_distribution()))
 
 def install_os_packages_from_files_apt(files):
-    args = ['sudo', 'dpkg', '-i'] + files
+    args = ['sudo', 'dpkg', '-i'] + list(files)
     subprocess_get_output(args) # no check_rc, missing deps return code 1
     subprocess_get_output(['sudo', 'apt-get', 'clean'], check_rc=True)
     subprocess_get_output(['sudo', 'apt-get', 'update'], check_rc=True)
     subprocess_get_output(['sudo', 'apt-get', 'install', '-yf'], check_rc=True)
 
 def install_os_packages_from_files_yum(files):
-    args = ['sudo', 'yum', 'localinstall', '-y', '--nogpgcheck'] + files
+    args = ['sudo', 'yum', 'localinstall', '-y', '--nogpgcheck'] + list(files)
     subprocess_get_output(args, check_rc=True)
 
 def install_os_packages_from_files_zypper(files):
@@ -115,6 +124,39 @@ def install_os_packages_from_files(files):
     except KeyError:
         raise NotImplementedError('install_os_packages_from_files() for [{0}]'.format(get_distribution()))
 
+def install_irods_repository_apt():
+    subprocess_get_output('wget -qO - https://core-dev.irods.org/irods-core-dev-signing-key.asc | sudo apt-key add -', shell=True, check_rc=True)
+    subprocess_get_output('echo "deb [arch=amd64] https://core-dev.irods.org/apt/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/renci-irods-core-dev.list', shell=True, check_rc=True)
+
+def install_irods_repository_yum():
+    subprocess_get_output(['sudo', 'rpm', '--import', 'https://core-dev.irods.org/irods-core-dev-signing-key.asc'], check_rc=True)
+    subprocess_get_output('wget -qO - https://core-dev.irods.org/renci-irods-core-dev.yum.repo | sudo tee /etc/yum.repos.d/renci-irods-core-dev.yum.repo', shell=True, check_rc=True)
+
+def install_irods_repository_zypper():
+    subprocess_get_output(['sudo', 'rpm', '--import', 'https://core-dev.irods.org/irods-core-dev-signing-key.asc'], check_rc=True)
+    subprocess_get_output('wget -qO - https://core-dev.irods.org/renci-irods-core-dev.zypp.repo | sudo tee /etc/zypp/repos.d/renci-irods-core-dev.zypp.repo', shell=True, check_rc=True)
+
+def install_irods_repository():
+    dispatch_map = {
+        'Ubuntu': install_irods_repository_apt,
+        'Centos': install_irods_repository_yum,
+        'Centos linux': install_irods_repository_yum,
+        'Opensuse ': install_irods_repository_zypper,
+    }
+
+    try:
+        dispatch_map[get_distribution()]()
+    except KeyError:
+        raise NotImplementedError('install_irods_repository() for [{0}]'.format(get_distribution()))
+
+def get_package_suffix():
+    d = get_distribution()
+    if d in ['Ubuntu']:
+        return 'deb'
+    if d in ['Centos', 'Centos linux', 'Opensuse ']:
+        return 'rpm'
+    raise NotImplementedError('get_package_suffix() for [{0}]'.format(get_distribution()))
+
 def get_irods_version():
     version = get_irods_version_from_json()
     if version:
@@ -126,12 +168,18 @@ def get_irods_version():
 
 def get_irods_version_from_json():
     try:
-        with open('/var/lib/irods/VERSION.json') as f:
+        with open('/var/lib/irods/VERSION.json.dist') as f:
             version_string = json.load(f)['irods_version']
-    except IOError as e:
-        if e.errno != 2:
+    except IOError as e1:
+        if e1.errno != 2:
             raise
-        return None
+        try:
+            with open('/var/lib/irods/VERSION.json') as f:
+                version_string = json.load(f)['irods_version']
+        except IOError as e2:
+            if e2.errno != 2:
+                raise
+            return None
     return tuple(map(int, version_string.split('.')))
 
 def get_irods_version_from_bash():
@@ -161,3 +209,12 @@ def euid_and_egid_set(name):
     finally:
         os.seteuid(initial_euid)
         os.setegid(initial_egid)
+
+def git_clone(repository, commitish=None, local_dir=None):
+    if local_dir is None:
+        local_dir = tempfile.mkdtemp()
+    subprocess_get_output(['git', 'clone', '--recursive', repository, local_dir], check_rc=True)
+    if commitish is not None:
+        subprocess_get_output(['git', 'checkout', commitish], cwd=local_dir, check_rc=True)
+    subprocess_get_output(['git', 'submodule', 'update', '--init', '--recursive'], cwd=local_dir, check_rc=True)
+    return local_dir

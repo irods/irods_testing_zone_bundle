@@ -2,10 +2,11 @@
 
 import abc
 import glob
+import itertools
 import json
 import os
-import itertools
 import shutil
+import tempfile
 
 
 class UnimplementedStrategy(object):
@@ -45,7 +46,7 @@ class GenericStrategy(object):
         self.output_root_directory = module.params['output_root_directory']
         self.git_repository = module.params['git_repository']
         self.git_commitish = module.params['git_commitish']
-        self.local_git_dir = os.path.expanduser('~/irods_externals')
+        self.local_git_dir = tempfile.mkdtemp(prefix='irods_externals', dir='/tmp') #os.path.expanduser('~/irods_externals')
 
     @property
     def output_directory(self):

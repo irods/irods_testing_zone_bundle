@@ -20,11 +20,14 @@ def run_tests(test_type, use_ssl, output_directory, federation_args):
     }
     test_type_argument = test_type_dict[test_type]
 
-    test_output_file = '/var/lib/irods/tests/test_output.txt'
+    if get_irods_version() < (4, 2):
+        test_output_file = '/var/lib/irods/tests/test_output.txt'
+    else:
+        test_output_file = '/var/lib/irods/test/test_output.txt'
     if test_type == 'federation':
         if get_irods_version() < (4, 0): # we are running copied code on an old zone
-            subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'mkdir /var/lib/irods/tests'], check_rc=True)
-        if get_irods_version() < (4, 2): # we are running copied code on an old zone
+            subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'mkdir -p /var/lib/irods/tests'], check_rc=True)
+        if get_irods_version() < (4, 2) and os.path.exists('/var/lib/irods/scripts/irods/database_connect.py'): # we are running copied code on an old zone
             subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'mkdir /var/lib/irods/log'], check_rc=True)
             subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'echo "" > /var/lib/irods/scripts/irods/database_connect.py'], check_rc=True)
 
@@ -54,7 +57,7 @@ def create_irodsauthuser_account():
         raise RuntimeError('failed to change {0} password, return code: {1}'.format(name, p.returncode))
 
 def get_authuser_name_and_password():
-    config_locations = ['/var/lib/irods/tests/test_framework_configuration.json',
+    config_locations = ['/var/lib/irods/test/test_framework_configuration.json',
                         '/var/lib/irods/tests/pydevtest/test_framework_configuration.json',]
     for l in config_locations:
         if os.path.exists(l):

@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 import abc
+import glob
+import itertools
 import json
 import os
 import shutil
@@ -45,6 +47,7 @@ class GenericStrategy(object):
         self.git_commitish = module.params['git_commitish']
         self.debug_build = module.params['debug_build']
         self.local_irods_git_dir = os.path.expanduser('~/irods')
+        self.local_irods_build_dir = os.path.expanduser('~/build-irods')
 
     @abc.abstractproperty
     def building_dependencies(self):
@@ -56,24 +59,64 @@ class GenericStrategy(object):
 
     def build(self):
         self.install_building_dependencies()
-        self.prepare_git_repository()
-        self.build_irods_packages_and_copy_output()
+        git_clone(self.git_repository, self.git_commitish, self.local_irods_git_dir)
+        self.build_irods_packages()
 
     def install_building_dependencies(self):
         install_os_packages(self.building_dependencies)
 
-    def prepare_git_repository(self):
-        self.module.run_command('git clone --recursive {0} {1}'.format(self.git_repository, self.local_irods_git_dir), check_rc=True)
-        self.module.run_command('git checkout {0}'.format(self.git_commitish), cwd=self.local_irods_git_dir, check_rc=True)
-        self.module.run_command('git submodule update --init --recursive', cwd=self.local_irods_git_dir, check_rc=True)
+    def build_irods_packages(self):
+        if os.path.exists(os.path.join(self.local_irods_git_dir, 'CMakeLists.txt')):
+            self.build_irods_packages_and_copy_output_cmake()
+        else:
+            self.build_irods_packages_and_copy_output_buildsh()
 
-    def build_irods_packages_and_copy_output(self):
+    def build_irods_packages_and_copy_output_cmake(self):
         try:
-            self.build_irods_packages()
+            os.makedirs(self.output_directory)
+            self.build_irods_packages_cmake()
+        finally:
+            for f in itertools.chain(glob.glob(os.path.join(self.local_irods_build_dir, '*.{0}'.format(get_package_suffix()))),
+                                     glob.glob(os.path.join(self.local_irods_build_dir, '*.output'))):
+                shutil.copy2(f, self.output_directory)
+
+    def build_irods_packages_cmake(self):
+        self.install_cmake_externals()
+        os.mkdir(self.local_irods_build_dir)
+        self.module.run_command('cmake {0} > cmake_irods.output'.format(self.local_irods_git_dir), cwd=self.local_irods_build_dir, use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('make -j4 > {0}'.format('make_irods.output'), cwd=self.local_irods_build_dir, use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('fakeroot make package >> {0}'.format('make_irods.output'), cwd=self.local_irods_build_dir, use_unsafe_shell=True, check_rc=True)
+        self.build_icommands_cmake()
+
+    def build_icommands_cmake(self):
+        install_os_packages_from_files(itertools.chain(glob.glob(os.path.join(self.local_irods_build_dir, 'irods-dev*.{0}'.format(get_package_suffix()))),
+                                                       glob.glob(os.path.join(self.local_irods_build_dir, 'irods-runtime*.{0}'.format(get_package_suffix())))))
+        icommands_git_dir = '/home/irodsbuild/irods_client_icommands'
+        git_clone('https://github.com/irods/irods_client_icommands', 'master', icommands_git_dir)
+        icommands_build_dir = '/home/irodsbuild/icommands_build'
+        os.mkdir(icommands_build_dir)
+        self.module.run_command('cmake {0} > cmake_icommands.output'.format(icommands_git_dir), cwd=icommands_build_dir, use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('make -j4 > {0}'.format('make_icommands.output'), cwd=icommands_build_dir, use_unsafe_shell=True, check_rc=True)
+        self.module.run_command('fakeroot make package >> {0}'.format('make_icommands.output'), cwd=icommands_build_dir, use_unsafe_shell=True, check_rc=True)
+        for f in itertools.chain(glob.glob(os.path.join(icommands_build_dir, '*.{0}'.format(get_package_suffix()))),
+                                 glob.glob(os.path.join(icommands_build_dir, '*.output'))):
+            shutil.copy2(f, self.output_directory)
+
+    def install_cmake_externals(self):
+        install_irods_repository()
+        with open(os.path.join(self.local_irods_git_dir, 'externals.json')) as f:
+            d = json.load(f)
+        install_os_packages([d['cmake']] + d['others'])
+        cmake_path = os.path.join('/opt/irods-externals', d['cmake'].split('irods-externals-')[1], 'bin')
+        os.environ['PATH'] = ':'.join([cmake_path, os.environ['PATH']])
+
+    def build_irods_packages_and_copy_output_buildsh(self):
+        try:
+            self.build_irods_packages_buildsh()
         finally:
             shutil.copytree(os.path.join(self.local_irods_git_dir, 'build'), self.output_directory)
 
-    def build_irods_packages(self):
+    def build_irods_packages_buildsh(self):
         os.makedirs(os.path.join(self.local_irods_git_dir, 'build'))
         build_flags = '' if self.debug_build else '-r'
         self.module.run_command('sudo ./packaging/build.sh {0} icat postgres > ./build/build_output_icat_postgres.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
@@ -83,7 +126,7 @@ class GenericStrategy(object):
 class RedHatStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        base = ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON', 'python-psutil']
+        base = ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'curl-devel', 'bzip2-devel', 'zlib-devel', 'pam-devel', 'openssl-devel', 'libxml2-devel', 'krb5-devel', 'unixODBC-devel', 'perl-JSON', 'python-psutil', 'fakeroot']
         version_specific = {
             '6': [],
             '7': ['mysql++-devel'],
@@ -103,8 +146,8 @@ class RedHatStrategy(GenericStrategy):
         self.module.run_command(['tar', '-xf', 'oci.tar', '-C', tar_dir], check_rc=True)
         self.module.run_command('sudo rpm -i --nodeps ./oci/*', use_unsafe_shell=True, check_rc=True)
 
-    def build_irods_packages(self):
-        super(RedHatStrategy, self).build_irods_packages()
+    def build_irods_packages_buildsh(self):
+        super(RedHatStrategy, self).build_irods_packages_buildsh()
         if get_distribution_version_major() == '6':
             build_flags = '' if self.debug_build else '-r'
             self.module.run_command('sudo ./packaging/build.sh {0} icat oracle > ./build/build_output_icat_oracle.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
@@ -112,10 +155,14 @@ class RedHatStrategy(GenericStrategy):
 class DebianStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['git', 'g++', 'make', 'python-dev', 'help2man', 'unixodbc', 'libfuse-dev', 'libcurl4-gnutls-dev', 'libbz2-dev', 'zlib1g-dev', 'libpam0g-dev', 'libssl-dev', 'libxml2-dev', 'libkrb5-dev', 'unixodbc-dev', 'libjson-perl', 'python-psutil']
+        return ['git', 'g++', 'make', 'python-dev', 'help2man', 'unixodbc', 'libfuse-dev', 'libcurl4-gnutls-dev', 'libbz2-dev', 'zlib1g-dev', 'libpam0g-dev', 'libssl-dev', 'libxml2-dev', 'libkrb5-dev', 'unixodbc-dev', 'libjson-perl', 'python-psutil', 'fakeroot']
 
     def install_building_dependencies(self):
         super(DebianStrategy, self).install_building_dependencies()
+        if get_distribution_version_major() == '12':
+            install_os_packages(['python-software-properties'])
+            self.module.run_command(['sudo', 'add-apt-repository', '-y', 'ppa:ubuntu-toolchain-r/test'], check_rc=True)
+            install_os_packages(['libstdc++6'])
         self.install_oracle_dependencies()
 
     def install_oracle_dependencies(self):
@@ -127,15 +174,20 @@ class DebianStrategy(GenericStrategy):
         install_os_packages(['alien', 'libaio1'])
         self.module.run_command('sudo alien -i ./oci/*', use_unsafe_shell=True, check_rc=True)
 
-    def build_irods_packages(self):
-        super(DebianStrategy, self).build_irods_packages()
+    def build_irods_packages_buildsh(self):
+        super(DebianStrategy, self).build_irods_packages_buildsh()
         build_flags = '' if self.debug_build else '-r'
         self.module.run_command('sudo ./packaging/build.sh {0} icat oracle > ./build/build_output_icat_oracle.log 2>&1'.format(build_flags), cwd=self.local_irods_git_dir, use_unsafe_shell=True, check_rc=True)
 
 class SuseStrategy(GenericStrategy):
     @property
     def building_dependencies(self):
-        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel', 'python-psutil']
+        return ['git', 'python-devel', 'help2man', 'unixODBC', 'fuse-devel', 'libcurl-devel', 'libbz2-devel', 'libopenssl-devel', 'libxml2-devel', 'krb5-devel', 'perl-JSON', 'unixODBC-devel', 'python-psutil', 'fakeroot']
+
+    def install_building_dependencies(self):
+        self.module.run_command(['sudo', 'zypper', 'addrepo', 'http://download.opensuse.org/repositories/devel:tools/openSUSE_13.2/devel:tools.repo'], check_rc=True)
+        self.module.run_command(['sudo', 'zypper', '--gpg-auto-import-keys', 'refresh'], check_rc=True)
+        super(SuseStrategy, self).install_building_dependencies()
 
 class CentOS6Builder(Builder):
     platform = 'Linux'

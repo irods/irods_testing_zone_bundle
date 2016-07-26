@@ -11,8 +11,12 @@ def configure_federation(federation, disable_client_server_negotiation, module):
         d['irods_client_server_negotiation'] = 'off'
         with open('/var/lib/irods/.irods/irods_environment.json', 'w') as f:
             json.dump(d, f, indent=4, sort_keys=True)
+    # reServer requires restart, possibly for server_config reload
     if federation:
-        module.run_command(['su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl restart'], check_rc=True) # reServer requires restart, possibly for server_config reload
+        if get_irods_version()[0:2] < (4, 2):
+            module.run_command(['su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl restart'], check_rc=True)
+        else:
+            module.run_command(['su', '-', 'irods', '-c', '/var/lib/irods/irodsctl restart'], check_rc=True)
 
 def main():
     module = AnsibleModule(

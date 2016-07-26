@@ -3,6 +3,7 @@
 import abc
 import json
 import os
+import re
 import tempfile
 import time
 
@@ -68,8 +69,7 @@ class GenericStrategy(object):
 
     def install_pip(self):
         local_pip_git_dir = os.path.expanduser('~/pip')
-        self.module.run_command(['git', 'clone', 'https://github.com/pypa/pip.git', local_pip_git_dir], check_rc=True)
-        self.module.run_command(['git', 'checkout', '7.1.2'], cwd=local_pip_git_dir, check_rc=True)
+        git_clone('https://github.com/pypa/pip.git', '7.1.2', local_pip_git_dir)
         self.module.run_command(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
 
     @property
@@ -77,16 +77,27 @@ class GenericStrategy(object):
         return ['bonnie++', 'fuse', 'git', 'python-psutil'] # python-psutil for federation tests, 4.0.3 package doesn't req it
 
     def install_icat(self):
-        icat_package_basename = filter(lambda x:'irods-icat' in x, os.listdir(self.irods_packages_directory))[0]
-        icat_package = os.path.join(self.irods_packages_directory, icat_package_basename)
-        install_os_packages_from_files([icat_package])
+        install_irods_repository()
+        icat_package_basename = filter(lambda x:'irods-icat' in x or 'irods-server' in x, os.listdir(self.irods_packages_directory))[0]
+        if 'irods-icat' in icat_package_basename:
+            icat_package = os.path.join(self.irods_packages_directory, icat_package_basename)
+            install_os_packages_from_files([icat_package])
+        elif 'irods-server' in icat_package_basename:
+            server_package = os.path.join(self.irods_packages_directory, icat_package_basename)
+            runtime_package = server_package.replace('irods-server', 'irods-runtime')
+            icommands_package = server_package.replace('irods-server', 'irods-icommands')
+            install_os_packages_from_files([runtime_package, icommands_package, server_package])
+        else:
+            raise RuntimeError('unhandled package name')
 
     @property
     def irods_packages_directory(self):
         return os.path.join(self.irods_packages_root_directory, get_irods_platform_string())
 
     def install_database_plugin(self):
-        database_plugin_basename = filter(lambda x:'irods-database-plugin-'+self.icat_database_type+'-' in x, os.listdir(self.irods_packages_directory))[0]
+        def package_filter(package_name):
+            return bool(re.match('irods-database-plugin-' + self.icat_database_type + '[-_]', package_name))
+        database_plugin_basename = filter(package_filter, os.listdir(self.irods_packages_directory))[0]
         database_plugin = os.path.join(self.irods_packages_directory, database_plugin_basename)
         install_os_packages_from_files([database_plugin])
 
@@ -111,6 +122,7 @@ class GenericStrategy(object):
                 preamble = '''\
 {service_account_name}
 {service_account_group}
+1
 '''
 
                 server_portion = '''\
@@ -121,7 +133,7 @@ class GenericStrategy(object):
 {control_plane_port}
 {schema_validation_base_uri}
 {irods_admin_account_name}
-
+yes
 {zone_key}
 {negotiation_key}
 {control_plane_key}
@@ -147,7 +159,7 @@ class GenericStrategy(object):
 {database_port}
 {database_name}
 {database_username}
-
+yes
 {database_password}
 
 '''
@@ -249,11 +261,14 @@ class GenericStrategy(object):
 
         setup_values.update(setup_values_database)
         setup_input = get_setup_input_template().format(**setup_values)
-        output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
+        if get_irods_version()[0:2] < (4, 2):
+            output_log = '/var/lib/irods/iRODS/installLogs/setup_irods.output'
+        else:
+            output_log = '/var/lib/irods/log/setup_irods.output'
         def get_setup_script_location():
             if os.path.exists('/var/lib/irods/packaging/setup_irods.sh'):
                 return '/var/lib/irods/packaging/setup_irods.sh'
-            return '/var/lib/irods/scripts/setup_irods.py'
+            return 'python /var/lib/irods/scripts/setup_irods.py'
         self.module.debug_messages['setup_irods input'] = setup_input.split('\n')
         self.module.run_command(['sudo', 'su', '-c', '{0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(get_setup_script_location(), output_log)], use_unsafe_shell=True, check_rc=True, data=setup_input)
 
