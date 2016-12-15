@@ -131,7 +131,7 @@ class GenericStrategy(object):
 {server_port_range_start}
 {server_port_range_end}
 {control_plane_port}
-{schema_validation_base_uri}
+
 {irods_admin_account_name}
 yes
 {zone_key}
@@ -280,6 +280,9 @@ yes
             with open('/etc/irods/server_config.json') as f:
                 d = json.load(f)
             d['federation'] = self.icat_server['server_config']['federation']
+            if get_irods_version() >= (4,2):
+                for entry in d['federation']:
+                    entry['catalog_provider_hosts'] = [entry['icat_host']]
             with open('/etc/irods/server_config.json', 'w') as f:
                 json.dump(d, f, indent=4, sort_keys=True)
         elif get_irods_version() >= (4,0):

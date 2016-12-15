@@ -11,20 +11,21 @@ import library
 
 
 @contextlib.contextmanager
-def vm_manager(vm_names):
+def vm_manager(vm_names, leak_vms):
     try:
         yield
     finally:
-        destroy_build_vms(vm_names)
+        if not leak_vms:
+            destroy_build_vms(vm_names)
 
-def run_ansible_module(run_name, ansible_module, ansible_arguments, sudo=False, platform_targets=None, ansible_module_directories=None):
+def run_ansible_module(run_name, ansible_module, ansible_arguments, sudo=False, platform_targets=None, ansible_module_directories=None, leak_vms=False):
     if platform_targets is None:
         platform_targets = [('CentOS', '6'), ('CentOS', '7'), ('Ubuntu', '12'), ('Ubuntu', '14'), ('openSUSE ', '13')]
     if ansible_module_directories is None:
         ansible_module_directories = []
 
     vm_names, ip_addresses = deploy_vms_return_names_and_ips(run_name, platform_targets)
-    with vm_manager(vm_names):
+    with vm_manager(vm_names, leak_vms):
         run_ansible_module_on_vms(ip_addresses, ansible_module, ansible_arguments, sudo, ansible_module_directories)
 
 def deploy_vms_return_names_and_ips(run_name, platform_targets):
@@ -60,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--ansible_module_directories', nargs='+', default=[])
     parser.add_argument('--platform_targets', nargs='+')
     parser.add_argument('--sudo', action='store_true')
+    parser.add_argument('--leak_vms', action='store_true')
     args = parser.parse_args()
 
     if len(args.ansible_arguments) % 2 != 0:
@@ -73,4 +75,4 @@ if __name__ == '__main__':
     library.register_log_handlers()
     library.convert_sigterm_to_exception()
 
-    run_ansible_module(args.run_name, args.ansible_module, ansible_arguments, args.sudo, platform_targets, args.ansible_module_directories)
+    run_ansible_module(args.run_name, args.ansible_module, ansible_arguments, args.sudo, platform_targets, args.ansible_module_directories, args.leak_vms)

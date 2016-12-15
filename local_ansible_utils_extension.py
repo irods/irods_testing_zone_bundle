@@ -31,6 +31,7 @@
 import contextlib
 import json
 import os
+import platform
 import pwd
 import subprocess
 import tempfile
@@ -63,12 +64,15 @@ stderr: {4}
     return p.returncode, out, err
 
 def install_pip():
-    local_pip_git_dir = tempfile.mkdtemp()
+    install_os_packages(['git'])
+    if platform.linux_distribution()[0] == 'Ubuntu':
+        install_os_packages(['python-setuptools'])
+    local_pip_git_dir = tempfile.mkdtemp(prefix='pip_git_dir')
     git_clone('https://github.com/pypa/pip.git', '7.1.2', local_pip_git_dir)
     subprocess_get_output(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
 
-def pip_install_irods_ci_helpers():
-    subprocess_get_output(['sudo', 'pip', 'install', 'git+file:///projects/irods/vsphere-testing/irods_ci_helpers'], check_rc=True)
+def pip_install_irods_python_ci_utilities():
+    subprocess_get_output(['sudo', 'pip', 'install', 'git+file:///projects/irods/vsphere-testing/irods_python_ci_utilities'], check_rc=True)
 
 def install_os_packages_apt(packages):
     subprocess_get_output(['sudo', 'apt-get', 'clean'], check_rc=True)

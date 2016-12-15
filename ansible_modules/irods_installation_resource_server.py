@@ -95,7 +95,7 @@ class GenericStrategy(object):
 {server_port_range_start}
 {server_port_range_end}
 {control_plane_port}
-{schema_validation_base_uri}
+
 {irods_admin_account_name}
 yes
 {zone_key}
