@@ -48,6 +48,8 @@ class GenericStrategy(object):
         self.debug_build = module.params['debug_build']
         self.local_irods_git_dir = os.path.expanduser('~/irods')
         self.local_irods_build_dir = os.path.expanduser('~/build-irods')
+        self.git_repository_icommands = module.params['git_repository_icommands']
+        self.git_commitish_icommands = module.params['git_commitish_icommands']
 
     @abc.abstractproperty
     def building_dependencies(self):
@@ -92,7 +94,7 @@ class GenericStrategy(object):
         install_os_packages_from_files(itertools.chain(glob.glob(os.path.join(self.local_irods_build_dir, 'irods-dev*.{0}'.format(get_package_suffix()))),
                                                        glob.glob(os.path.join(self.local_irods_build_dir, 'irods-runtime*.{0}'.format(get_package_suffix())))))
         icommands_git_dir = '/home/irodsbuild/irods_client_icommands'
-        git_clone('https://github.com/irods/irods_client_icommands', 'master', icommands_git_dir)
+        git_clone(self.git_repository_icommands, self.git_commitish_icommands, icommands_git_dir)
         icommands_build_dir = '/home/irodsbuild/icommands_build'
         os.mkdir(icommands_build_dir)
         self.module.run_command('cmake {0} > cmake_icommands.output'.format(icommands_git_dir), cwd=icommands_build_dir, use_unsafe_shell=True, check_rc=True)
@@ -216,6 +218,8 @@ def main():
             git_repository=dict(type='str', required=True),
             git_commitish=dict(type='str', required=True),
             debug_build=dict(type='bool', required=True),
+            git_repository_icommands=dict(type='str', required=True),
+            git_commitish_icommands=dict(type='str', required=True),
         ),
         supports_check_mode=False,
     )

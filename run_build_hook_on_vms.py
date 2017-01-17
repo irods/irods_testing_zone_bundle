@@ -24,7 +24,7 @@ def vm_manager(vm_names):
 def run_build_hook_on_vms(build_name, git_repository, git_commitish, platform_targets, passthrough_arguments):
     vm_names, ip_addresses = deploy_build_vms_return_names_and_ips(build_name, platform_targets)
     with vm_manager(vm_names):
-        build_plugin_on_vms(ip_addresses, git_repository, git_commitish, platform_targets, passthrough_arguments)
+        build_plugin_on_vms(ip_addresses, git_repository, git_commitish, passthrough_arguments)
 
 def deploy_build_vms_return_names_and_ips(build_name, platform_targets):
     def generate_vm_name(build_name, os_name, os_version):
@@ -41,7 +41,7 @@ def deploy_build_vms_return_names_and_ips(build_name, platform_targets):
     ip_addresses = [result.get() for result in proc_pool_results]
     return vm_names, ip_addresses
 
-def build_plugin_on_vms(ip_addresses, git_repository, git_commitish, platform_targets, passthrough_arguments):
+def build_plugin_on_vms(ip_addresses, git_repository, git_commitish, passthrough_arguments):
     complex_args = {
         'git_repository': git_repository,
         'git_commitish': git_commitish,

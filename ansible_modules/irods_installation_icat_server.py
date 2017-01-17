@@ -417,6 +417,15 @@ class DebianStrategy(GenericStrategy):
             self.module.run_command(['sudo', 'su', '-', 'root', '-c', "echo 'log_bin_trust_function_creators=1' >> /etc/mysql/conf.d/irods.cnf"], check_rc=True)
             self.module.run_command(['sudo', 'service', 'mysql', 'restart'], check_rc=True)
             self.install_mysql_pcre(['libpcre3-dev', 'libmysqlclient-dev', 'build-essential', 'libtool', 'autoconf', 'git'], 'mysql')
+            if get_distribution_version_major() == '16':
+                tar_output_dir = tempfile.mkdtemp(prefix='irods_mysql_connector_tar_extraction')
+                self.module.run_command(['tar', 'xf', '/projects/irods/vsphere-testing/externals/mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit.tar.gz', '--directory', tar_output_dir], check_rc=True)
+                self.module.run_command(['sudo', 'cp', os.path.join(tar_output_dir, 'mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit', 'lib', 'libmyodbc5a.so'), '/usr/lib'], check_rc=True)
+                self.module.run_command(['sudo', 'cp', os.path.join(tar_output_dir, 'mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit', 'lib', 'libmyodbc5S.so'), '/usr/lib'], check_rc=True)
+                self.module.run_command(['sudo', 'cp', os.path.join(tar_output_dir, 'mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit', 'lib', 'libmyodbc5w.so'), '/usr/lib'], check_rc=True)
+                self.module.run_command(['sudo', 'ln', '-s', '/var/run/mysqld/mysqld.sock', '/tmp/mysql.sock'], check_rc=True)
+                self.module.run_command(['sudo', os.path.join(tar_output_dir, 'mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit', 'bin', 'myodbc-installer'), '-d', '-a', '-n', 'MySQL ODBC 5.3 Unicode Driver', '-t', 'DRIVER=/usr/lib/libmyodbc5w.so;SETUP=/usr/lib/myodbc5S.so'], check_rc=True)
+                self.module.run_command(['sudo', os.path.join(tar_output_dir, 'mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit', 'bin', 'myodbc-installer'), '-d', '-a', '-n', 'MySQL ODBC 5.3 ANSI Driver', '-t', 'DRIVER=/usr/lib/libmyodbc5a.so;SETUP=/usr/lib/myodbc5S.so'], check_rc=True)
         elif self.icat_database_type == 'oracle':
             with tempfile.NamedTemporaryFile() as f:
                 f.write('''

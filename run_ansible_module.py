@@ -21,6 +21,9 @@ def vm_manager(vm_names, leak_vms):
 def run_ansible_module(run_name, ansible_module, ansible_arguments, sudo=False, platform_targets=None, ansible_module_directories=None, leak_vms=False):
     if platform_targets is None:
         platform_targets = [('CentOS', '6'), ('CentOS', '7'), ('Ubuntu', '12'), ('Ubuntu', '14'), ('openSUSE ', '13')]
+    else:
+        platform_targets = eval(platform_targets) # e.g.  platform_targets = [('CentOS', '6'), ('Ubuntu', '12'), ('Ubuntu', '14'), ('openSUSE ', '13')]
+
     if ansible_module_directories is None:
         ansible_module_directories = []
 
@@ -59,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--ansible_module', type=str, required=True)
     parser.add_argument('--ansible_arguments', nargs='+', required=True)
     parser.add_argument('--ansible_module_directories', nargs='+', default=[])
-    parser.add_argument('--platform_targets', nargs='+')
+    parser.add_argument('--platform_targets', type=str)
     parser.add_argument('--sudo', action='store_true')
     parser.add_argument('--leak_vms', action='store_true')
     args = parser.parse_args()
@@ -67,12 +70,8 @@ if __name__ == '__main__':
     if len(args.ansible_arguments) % 2 != 0:
         sys.exit('--ansible_arguments must have an even number of arguments')
     ansible_arguments = {args.ansible_arguments[i]: args.ansible_arguments[i+1] for i in range(0, len(args.ansible_arguments), 2)}
-    if args.platform_targets:
-        platform_targets = [tuple(target.rsplit('_')) for target in args.platform_targets]
-    else:
-        platform_targets = None
 
     library.register_log_handlers()
     library.convert_sigterm_to_exception()
 
-    run_ansible_module(args.run_name, args.ansible_module, ansible_arguments, args.sudo, platform_targets, args.ansible_module_directories, args.leak_vms)
+    run_ansible_module(args.run_name, args.ansible_module, ansible_arguments, args.sudo, args.platform_targets, args.ansible_module_directories, args.leak_vms)
