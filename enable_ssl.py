@@ -68,7 +68,7 @@ def update_core_re_zone(zone):
 
     complex_args = {
         'dest': '/etc/irods/core.re',
-        'regexp': r'^acPreConnect\(\*OUT\) \{ \*OUT="CS_NEG_DONT_CARE"; \}$',
+        'regexp': r'^acPreConnect\(\*OUT\) \{ \*OUT="CS_NEG_(DONT_CARE|REFUSE)"; \}$',
         'replace': 'acPreConnect(*OUT) { *OUT="CS_NEG_REQUIRE"; }',
     }
 
