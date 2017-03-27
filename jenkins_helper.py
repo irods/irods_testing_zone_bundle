@@ -18,21 +18,6 @@ def list_to_dict(l):
         d[l[i]] = l[i+1]
     return d
 
-def split_list(l, sep):
-    ret = []
-    cur = []
-    for i in l:
-        if i == sep:
-            ret.append(cur)
-            cur = []
-        else:
-            cur.append(i)
-    if cur:
-        ret.append(cur)
-    elif i == sep:
-         ret.append([])
-    return ret
-
 if __name__ == '__main__':
     library.register_log_handlers()
     library.convert_sigterm_to_exception()

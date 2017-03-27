@@ -1,3 +1,4 @@
+import contextlib
 import imp
 import logging
 import multiprocessing
@@ -47,8 +48,37 @@ def get_servers_from_zone(zone):
 def deploy_vm_return_ip(vm_name, template_identifier):
     return provisioner_lib.deploy_vm_return_ip(vm_name, template_identifier)
 
+def deploy_vms_return_names_and_ips(run_name, platform_targets):
+    def generate_vm_name(run_name, os_name, os_version):
+        return '{0} :: {1}_{2}'.format(run_name, os_name, os_version)
+
+    vm_names = [generate_vm_name(run_name, os_name, os_version) for os_name, os_version in platform_targets]
+
+    proc_pool = multiprocessing.Pool(len(platform_targets))
+    proc_pool_results = [proc_pool.apply_async(deploy_vm_return_ip,
+                                               (vm_name, (os_name, os_version)))
+                      for (os_name, os_version), vm_name in zip(platform_targets, vm_names)]
+
+    ip_addresses = [result.get() for result in proc_pool_results]
+    return vm_names, ip_addresses
+
 def destroy_vm(vm_name):
     provisioner_lib.destroy_vm(vm_name)
+
+def destroy_build_vms(vm_names):
+    proc_pool = multiprocessing.Pool(len(vm_names))
+    proc_pool_results = [proc_pool.apply_async(destroy_vm, (vm_name,))
+                         for vm_name in vm_names]
+    for result in proc_pool_results:
+        result.get()
+
+@contextlib.contextmanager
+def vm_manager(vm_names, leak_vms):
+    try:
+        yield
+    finally:
+        if not leak_vms:
+            destroy_build_vms(vm_names)
 
 def get_ansible_modules_directory():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ansible_modules')
