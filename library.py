@@ -149,3 +149,12 @@ def convert_sigterm_to_exception():
     def sigterm_handler(_signo, _stack_frame):
         sys.exit(1)
     signal.signal(signal.SIGTERM, sigterm_handler)
+
+def make_argparse_true_or_false(option):
+    def argparse_true_or_false(command_line_option):
+        if command_line_option == 'true':
+            return True
+        elif command_line_option == 'false':
+            return False
+        raise RuntimeError('Flag {} must be followed by either "true" or "false"'.format(option))
+    return argparse_true_or_false

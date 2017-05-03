@@ -46,6 +46,7 @@ class GenericStrategy(object):
         self.irods_packages_root_directory = module.params['irods_packages_root_directory']
         self.icat_server = module.params['icat_server']
         self.icat_database_type = module.params['icat_server']['database_config']['catalog_database_type']
+        self.install_dev_package = module.params['install_dev_package']
 
     @abc.abstractmethod
     def install_database(self):
@@ -89,6 +90,11 @@ class GenericStrategy(object):
             install_os_packages_from_files([runtime_package, icommands_package, server_package])
         else:
             raise RuntimeError('unhandled package name')
+
+        if self.install_dev_package:
+            dev_package_basename = filter(lambda x:'irods-dev' in x, os.listdir(self.irods_packages_directory))[0]
+            dev_package = os.path.join(self.irods_packages_directory, dev_package_basename)
+            install_os_packages_from_files([dev_package])
 
     @property
     def irods_packages_directory(self):
@@ -386,6 +392,8 @@ ICAT =
         super(RedHatStrategy, self).install_testing_dependencies()
         if get_distribution_version_major() == '6':
             self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
+        if get_distribution_version_major() == '7':
+            self.module.run_command(['sudo', 'chmod', 'go+rw', '/dev/fuse'], check_rc=True)
 
 class DebianStrategy(GenericStrategy):
     def install_pip(self):
@@ -502,6 +510,7 @@ def main():
         argument_spec = dict(
             irods_packages_root_directory=dict(type='str', required=True),
             icat_server=dict(type='dict', required=True),
+            install_dev_package=dict(type='bool', required=True),
         ),
         supports_check_mode=False,
     )

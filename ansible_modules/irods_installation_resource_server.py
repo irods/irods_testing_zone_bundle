@@ -48,6 +48,7 @@ class GenericStrategy(object):
         self.module = module
         self.irods_packages_root_directory = module.params['irods_packages_root_directory']
         self.resource_server = module.params['resource_server']
+        self.install_dev_package = module.params['install_dev_package']
 
     @property
     def testing_dependencies(self):
@@ -82,6 +83,11 @@ class GenericStrategy(object):
             install_os_packages_from_files([runtime_package, icommands_package, server_package])
         else:
             raise RuntimeError('unhandled package name')
+
+        if self.install_dev_package:
+            dev_package_basename = filter(lambda x:'irods-dev' in x, os.listdir(self.irods_packages_directory))[0]
+            dev_package = os.path.join(self.irods_packages_directory, dev_package_basename)
+            install_os_packages_from_files([dev_package])
 
     def run_setup_script(self):
         if os.path.exists('/var/lib/irods/scripts/setup_irods.py'):
@@ -228,6 +234,7 @@ def main():
         argument_spec = dict(
             irods_packages_root_directory=dict(type='str', required=True),
             resource_server=dict(type='dict', required=True),
+            install_dev_package=dict(type='bool', required=True),
         ),
         supports_check_mode=False,
     )

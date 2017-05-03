@@ -9,13 +9,13 @@ import destroy
 import library
 
 
-def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None, destroy_vm_on_failure=True):
+def deploy(zone_bundle_input, deployment_name, version_to_packages_map, zone_bundle_output_file=None, destroy_vm_on_failure=True, install_dev_package=False):
     zone_bundle_deployed = deploy_zone_bundle(zone_bundle_input, deployment_name)
     with destroy.deployed_zone_bundle_manager(zone_bundle_deployed, on_regular_exit=False, on_exception=destroy_vm_on_failure):
         if zone_bundle_output_file:
             save_zone_bundle(zone_bundle_output_file, zone_bundle_deployed)
         configure_zone_bundle_networking(zone_bundle_deployed)
-        zone_bundle_deployed_updated = install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map)
+        zone_bundle_deployed_updated = install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map, install_dev_package)
         if zone_bundle_output_file:
             save_zone_bundle(zone_bundle_output_file, zone_bundle_deployed_updated)
         configure_federation_on_zone_bundle(zone_bundle_deployed_updated)
@@ -111,28 +111,29 @@ def configure_zone_hostnames(zone):
         server_ip = server['deployment_information']['ip_address']
         library.run_ansible(module_name='hostname', module_args='name={0}'.format(server['hostname']), host_list=[server_ip], sudo=True)
 
-def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map):
+def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map, install_dev_package):
     proc_pool = library.RecursiveMultiprocessingPool(len(zone_bundle['zones']))
     proc_pool_results = [proc_pool.apply_async(install_irods_on_zone,
-                                               (zone, version_to_packages_map))
+                                               (zone, version_to_packages_map, install_dev_package))
                          for zone in zone_bundle['zones']]
     zone_bundle_updated = copy.deepcopy(zone_bundle)
     zone_bundle_updated['zones'] = [result.get() for result in proc_pool_results]
     return zone_bundle_updated
 
-def install_irods_on_zone(zone, version_to_packages_map):
-    icat_server = install_irods_on_zone_icat_server(zone['icat_server'], version_to_packages_map)
-    resource_servers = install_irods_on_zone_resource_servers(zone['resource_servers'], version_to_packages_map)
+def install_irods_on_zone(zone, version_to_packages_map, install_dev_package):
+    icat_server = install_irods_on_zone_icat_server(zone['icat_server'], version_to_packages_map, install_dev_package)
+    resource_servers = install_irods_on_zone_resource_servers(zone['resource_servers'], version_to_packages_map, install_dev_package)
     zone['icat_server'] = icat_server
     zone['resource_servers'] = resource_servers
     return zone
 
-def install_irods_on_zone_icat_server(icat_server, version_to_packages_map):
+def install_irods_on_zone_icat_server(icat_server, version_to_packages_map, install_dev_package):
     if icat_server['version']['irods_version'] != '3.3.1':
         icat_ip = icat_server['deployment_information']['ip_address']
         complex_args = {
             'icat_server': icat_server,
             'irods_packages_root_directory': version_to_packages_map[icat_server['version']['irods_version']],
+            'install_dev_package': install_dev_package,
         }
         data = library.run_ansible(module_name='irods_installation_icat_server', complex_args=complex_args, host_list=[icat_ip], sudo=True)
         if icat_server['version']['irods_version'] == 'deployment-determined':
@@ -140,21 +141,22 @@ def install_irods_on_zone_icat_server(icat_server, version_to_packages_map):
 
     return icat_server
 
-def install_irods_on_zone_resource_servers(resource_servers, version_to_packages_map):
+def install_irods_on_zone_resource_servers(resource_servers, version_to_packages_map, install_dev_package):
     n = len(resource_servers)
     if n > 0:
         proc_pool = library.RecursiveMultiprocessingPool(n)
         proc_pool_results = [proc_pool.apply_async(install_irods_on_zone_resource_server,
-                                                   (resource_server, version_to_packages_map))
+                                                   (resource_server, version_to_packages_map, install_dev_package))
                              for resource_server in resource_servers]
         resource_servers = [result.get() for result in proc_pool_results]
     return resource_servers
 
-def install_irods_on_zone_resource_server(resource_server, version_to_packages_map):
+def install_irods_on_zone_resource_server(resource_server, version_to_packages_map, install_dev_package):
     resource_ip = resource_server['deployment_information']['ip_address']
     complex_args = {
         'resource_server': resource_server,
         'irods_packages_root_directory': version_to_packages_map[resource_server['version']['irods_version']],
+        'install_dev_package': install_dev_package,
     }
     data = library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=[resource_ip])
 
@@ -183,6 +185,7 @@ if __name__ == '__main__':
     parser.add_argument('--zone_bundle_input', type=str, required=True)
     parser.add_argument('--deployment_name', type=str, required=True)
     parser.add_argument('--version_to_packages_map', type=str, required=True, nargs='+')
+    parser.add_argument('--install_dev_package', action='store_true')
     parser.add_argument('--zone_bundle_output', type=str)
     parser.add_argument('--leave-vm-on-failure', action='store_true')
     args = parser.parse_args()
@@ -200,4 +203,4 @@ if __name__ == '__main__':
     library.register_log_handlers()
     library.convert_sigterm_to_exception()
 
-    deploy(zone_bundle, args.deployment_name, version_to_packages_map, args.zone_bundle_output, not args.leave_vm_on_failure)
+    deploy(zone_bundle, args.deployment_name, version_to_packages_map, args.zone_bundle_output, not args.leave_vm_on_failure, install_dev_package=args.install_dev_package)
