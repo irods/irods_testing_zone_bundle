@@ -68,7 +68,8 @@ class GenericStrategy(object):
             install_os_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
-        self.module.run_command(['sudo', '-E', 'pip2', 'install', '--upgrade', 'unittest-xml-reporting==1.14.0'], check_rc=True)
+        self.module.run_command(['sudo', '-E', 'pip2', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
+        #self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
 
     def install_resource(self):
         install_irods_repository()

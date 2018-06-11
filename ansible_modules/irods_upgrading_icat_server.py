@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import abc
 import json
 import hashlib
@@ -10,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import logging
 
 
 class UnimplementedStrategy(object):
@@ -55,24 +54,40 @@ class GenericStrategy(object):
 
     def upgrade(self):
         initial_version = get_irods_version()
-        self.stop_server()
+        self.stop_server(initial_version)
         self.upgrade_irods_packages()
         final_version = get_irods_version()
         self.upgrade_core_re(initial_version, final_version)
-        self.stop_server() # some upgrades start the server, and starting a running server fails
-        self.start_server()
+        self.stop_server(final_version) # some upgrades start the server, and starting a running server fails
+        self.start_server(final_version)
 
-    def stop_server(self):
-        self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl stop'], check_rc=True)
+    def stop_server(self, irods_version):
+        if irods_version <= (4,1):
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl stop'], check_rc=True)
+        else:
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/irodsctl stop'], check_rc=True)
 
     def upgrade_irods_packages(self):
-        database_plugin_basename = filter(lambda x:'irods-database-plugin-'+self.icat_database_type+'-' in x, os.listdir(self.irods_packages_directory))[0]
-        database_plugin = os.path.join(self.irods_packages_directory, database_plugin_basename)
-        install_os_packages_from_files([database_plugin])
+        database_plugin = self.get_database_plugin()
 
-        icat_package_basename = filter(lambda x:'irods-icat' in x, os.listdir(self.irods_packages_directory))[0]
-        icat_package = os.path.join(self.irods_packages_directory, icat_package_basename)
-        install_os_packages_from_files([icat_package])
+        icat_package_basename = filter(lambda x:'irods-icat' in x or 'irods-server' in x, os.listdir(self.irods_packages_directory))[0]
+        if 'irods-icat' in icat_package_basename:
+            icat_package = os.path.join(self.irods_packages_directory, icat_package_basename)
+            install_os_packages_from_files([icat_package, database_plugin])
+        elif 'irods-server' in icat_package_basename:
+            server_package = os.path.join(self.irods_packages_directory, icat_package_basename)
+            runtime_package = server_package.replace('irods-server', 'irods-runtime')
+            icommands_package = server_package.replace('irods-server', 'irods-icommands')
+            install_os_packages_from_files([runtime_package, icommands_package, server_package, database_plugin])
+        else:
+            raise RuntimeError('unhandled package name')
+
+    def get_database_plugin(self):
+          def package_filter(package_name):
+              return bool(re.match('irods-database-plugin-' + self.icat_database_type + '[-_]', package_name))
+          database_plugin_basename = filter(package_filter, os.listdir(self.irods_packages_directory))[0]
+          database_plugin = os.path.join(self.irods_packages_directory, database_plugin_basename)
+          return database_plugin
 
     def upgrade_core_re(self, initial_version, final_version):
         if initial_version < (4,1) and final_version >= (4,1):
@@ -96,8 +111,11 @@ acDeleteCollByAdminIfPresent(*parColl,*childColl) {
                 self.module.run_command(['sudo', 'su', '-', '-c', 'mv /etc/irods/core.re.updated /etc/irods/core.re'], check_rc=True)
                 self.module.run_command(['sudo', 'chown', 'irods:irods', '/etc/irods/core.re'], check_rc=True)
 
-    def start_server(self):
-        self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl start'], check_rc=True)
+    def start_server(self, irods_version):
+        if irods_version <= (4,1):
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl start'], check_rc=True)
+        else:
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/irodsctl start'], check_rc=True)
 
 class CentOS6IcatUpgrader(IcatUpgrader):
     platform = 'Linux'

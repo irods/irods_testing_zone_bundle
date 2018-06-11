@@ -37,11 +37,16 @@ def main():
     args = parser.parse_args()
 
     version_to_packages_map = list_to_dict(args.version_to_packages_map)
+    passthru_args_dict = list_to_dict(args.passthrough_arguments)
+
+    mungefs_packages_dir = 'None'
+    if '--mungefs_packages_dir' in passthru_args_dict:
+        mungefs_packages_dir = passthru_args_dict['--mungefs_packages_dir']
 
     with open(args.zone_bundle_input) as f:
         zone_bundle = json.load(f)
 
-    deployed_zone_bundle = deploy.deploy(zone_bundle, args.deployment_name, version_to_packages_map, install_dev_package=args.install_dev_package)
+    deployed_zone_bundle = deploy.deploy(zone_bundle, args.deployment_name, version_to_packages_map, mungefs_packages_dir, install_dev_package=args.install_dev_package)
     with destroy.deployed_zone_bundle_manager(deployed_zone_bundle, on_exception=not args.leak_vms, on_regular_exit=not args.leak_vms):
         ansible_result = checkout_git_repo_and_run_python_script_on_icat(deployed_zone_bundle, args.git_repository, args.git_commitish, args.python_script, args.passthrough_arguments)
 

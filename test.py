@@ -19,28 +19,28 @@ def directory_deleter(dirname):
     finally:
         shutil.rmtree(dirname)
 
-def test(zone_bundle, test_type, use_ssl, output_directory):
-    return test_zone_bundle(zone_bundle, test_type, use_ssl, output_directory)
+def test(zone_bundle, test_type, use_ssl, use_mungefs, output_directory):
+    return test_zone_bundle(zone_bundle, test_type, use_ssl, use_mungefs, output_directory)
 
-def test_zone_bundle(zone_bundle, test_type, use_ssl, output_directory):
+def test_zone_bundle(zone_bundle, test_type, use_ssl, use_mungefs, output_directory):
     library.makedirs_catch_preexisting(output_directory)
     if test_type == 'federation':
-        return test_federation(zone_bundle, use_ssl, output_directory)
-    return test_zone(zone_bundle['zones'][0], test_type, use_ssl, output_directory)
+        return test_federation(zone_bundle, use_ssl, use_mungefs, output_directory)
+    return test_zone(zone_bundle['zones'][0], test_type, use_ssl, use_mungefs, output_directory)
 
-def test_federation(zone_bundle, use_ssl, output_directory):
+def test_federation(zone_bundle, use_ssl, use_mungefs, output_directory):
     zone0 = zone_bundle['zones'][0]
     zone1 = zone_bundle['zones'][1]
 
-    data = test_federation_zone_to_zone(zone0, zone1, use_ssl, output_directory)
+    data = test_federation_zone_to_zone(zone0, zone1, use_ssl, use_mungefs, output_directory)
     if not data['contacted'][zone0['icat_server']['deployment_information']['ip_address']]['tests_passed']:
         return False
 
     copy_testing_code(zone0, zone1)
-    data = test_federation_zone_to_zone(zone1, zone0, use_ssl, output_directory)
+    data = test_federation_zone_to_zone(zone1, zone0, use_ssl, use_mungefs, output_directory)
     return data['contacted'][zone1['icat_server']['deployment_information']['ip_address']]['tests_passed']
 
-def test_federation_zone_to_zone(local_zone, remote_zone, use_ssl, output_directory):
+def test_federation_zone_to_zone(local_zone, remote_zone, use_ssl, use_mungefs, output_directory):
     complex_args = {
         'username': 'zonehopper#{0}'.format(local_zone['icat_server']['server_config']['zone_name'])
     }
@@ -51,6 +51,7 @@ def test_federation_zone_to_zone(local_zone, remote_zone, use_ssl, output_direct
         'test_type': 'federation',
         'output_directory': output_directory,
         'use_ssl': use_ssl,
+        'use_mungefs': use_mungefs,
         'federation_args': [remote_zone['icat_server']['version']['irods_version'],
                             remote_zone['icat_server']['server_config']['zone_name'],
                             remote_zone['icat_server']['hostname'],]
@@ -126,6 +127,7 @@ def test_zone(zone, test_type, use_ssl, output_directory):
         'test_type': test_type,
         'output_directory': output_directory,
         'use_ssl': use_ssl,
+        'use_mungefs': use_mungefs,
     }
 
     data = library.run_ansible(module_name='irods_testing', complex_args=complex_args, host_list=[test_server_ip])
@@ -144,6 +146,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_type', type=str, required=True, choices=['standalone_icat', 'topology_icat', 'topology_resource', 'federation'])
     parser.add_argument('--output_directory', type=str, required=True)
     parser.add_argument('--use_ssl', action='store_true')
+    parser.add_argument('--use_mungefs', action='store_true')
 
     args = parser.parse_args()
 
@@ -153,5 +156,5 @@ if __name__ == '__main__':
     library.register_log_handlers()
     library.convert_sigterm_to_exception()
 
-    if not test_zone_bundle(zone_bundle, args.test_type, args.use_ssl, args.output_directory):
+    if not test_zone_bundle(zone_bundle, args.test_type, args.use_ssl, args.use_mungefs, args.output_directory):
         sys.exit(1)

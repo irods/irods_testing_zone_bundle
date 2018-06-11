@@ -44,6 +44,7 @@ class GenericStrategy(object):
         self.module = module
         self.module.debug_messages = {}
         self.irods_packages_root_directory = module.params['irods_packages_root_directory']
+        self.mungefs_packages_root_directory = module.params['mungefs_packages_root_directory']
         self.icat_server = module.params['icat_server']
         self.icat_database_type = module.params['icat_server']['database_config']['catalog_database_type']
         self.install_dev_package = module.params['install_dev_package']
@@ -66,11 +67,18 @@ class GenericStrategy(object):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
         self.install_pip()
-        self.module.run_command(['sudo', '-E', 'pip2', 'install', '--upgrade', 'unittest-xml-reporting==1.14.0'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'pyOpenSSL', 'ndg-httpsclient', 'pyasn1'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+
+    if self.mungefs_packages_root_directory != 'None':
+        mungefs_package_basename = filter(lambda x:'munge' in x, os.listdir(self.mungefs_packages_directory))[0]
+        mungefs_package = os.path.join(self.mungefs_packages_directory, mungefs_package_basename)
+        install_os_packages_from_files([mungefs_package])
 
     def install_pip(self):
         local_pip_git_dir = os.path.expanduser('~/pip')
-        git_clone('https://github.com/pypa/pip.git', '7.1.2', local_pip_git_dir)
+        git_clone('https://github.com/pypa/pip.git', '10.0.0', local_pip_git_dir)
         self.module.run_command(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
 
     @property
@@ -95,6 +103,10 @@ class GenericStrategy(object):
             dev_package_basename = filter(lambda x:'irods-dev' in x, os.listdir(self.irods_packages_directory))[0]
             dev_package = os.path.join(self.irods_packages_directory, dev_package_basename)
             install_os_packages_from_files([dev_package])
+
+    @property
+    def mungefs_packages_directory(self):
+        return os.path.join(self.mungefs_packages_root_directory, get_irods_platform_string())
 
     @property
     def irods_packages_directory(self):
@@ -310,7 +322,7 @@ yes
 class RedHatStrategy(GenericStrategy):
     @property
     def testing_dependencies(self):
-        return super(RedHatStrategy, self).testing_dependencies + ['python-unittest2']
+        return super(RedHatStrategy, self).testing_dependencies + ['python-unittest2', 'fuse', 'fuse-devel', 'openssl-devel', 'python-devel', 'libffi-devel']
 
     def install_database_plugin(self):
         if self.icat_database_type != 'oracle':
@@ -393,9 +405,16 @@ ICAT =
         if get_distribution_version_major() == '6':
             self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
         if get_distribution_version_major() == '7':
-            self.module.run_command(['sudo', 'chmod', 'go+rw', '/dev/fuse'], check_rc=True)
+            self.module.run_command(['sudo', 'groupadd', 'fuse'], check_rc=True)
+            self.module.run_command(['sudo', 'usermod', '-a', '-G', 'fuse', 'irods'], check_rc=True)
+            self.module.run_command(['sudo', 'chown', 'root:fuse', '/dev/fuse'], check_rc=True)
+            self.module.run_command(['sudo', 'chmod', 'g+rwx', '/dev/fuse'], check_rc=True)
 
 class DebianStrategy(GenericStrategy):
+    @property
+    def testing_dependencies(self):
+        return super(DebianStrategy, self).testing_dependencies + ['python-dev', 'libffi-dev', 'libssl-dev']
+
     def install_pip(self):
         install_os_packages(['python-setuptools'])
         return super(DebianStrategy, self).install_pip()
@@ -509,6 +528,7 @@ def main():
     module = AnsibleModule(
         argument_spec = dict(
             irods_packages_root_directory=dict(type='str', required=True),
+            mungefs_packages_root_directory=dict(type='str', required=False),
             icat_server=dict(type='dict', required=True),
             install_dev_package=dict(type='bool', required=True),
         ),

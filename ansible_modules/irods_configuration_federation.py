@@ -5,6 +5,10 @@ import json
 def configure_federation(federation, disable_client_server_negotiation, module):
     for f in federation:
         module.run_command(['su', '-', 'irods', '-c', 'iadmin mkzone {0} remote {1}:{2}'.format(f['zone_name'], f['icat_host'], f['zone_port'])], check_rc=True)
+        if f['zone_name'] == 'tempZone':
+            sqlQuery = 'select alias, sqlStr from R_SPECIFIC_QUERY'
+            module.run_command(['su', '-', 'irods', '-c', "iadmin asq '{sqlQuery}' bug_3466_query".format(**locals())], check_rc=True)
+
     if disable_client_server_negotiation and get_irods_version() >= (4, 1):
         with open('/var/lib/irods/.irods/irods_environment.json') as f:
             d = json.load(f)

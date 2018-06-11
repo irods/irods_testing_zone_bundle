@@ -58,15 +58,29 @@ class GenericStrategy(object):
         self.start_server()
 
     def stop_server(self):
-        self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl stop'], check_rc=True)
+        if get_irods_version() <= (4,1):
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl stop'], check_rc=True)
+        else:
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/irodsctl stop'], check_rc=True)
 
     def upgrade_irods_packages(self):
-        resource_package_basename = filter(lambda x:'irods-resource' in x, os.listdir(self.irods_packages_directory))[0]
-        resource_package = os.path.join(self.irods_packages_directory, resource_package_basename)
-        install_os_packages_from_files([resource_package])
+        resource_package_basename = filter(lambda x:'irods-resource' in x or 'irods-server' in x, os.listdir(self.irods_packages_directory))[0]
+        if 'irods-resource' in resource_package_basename:
+            resource_package = os.path.join(self.irods_packages_directory, resource_package_basename)
+            install_os_packages_from_files([resource_package])
+        elif 'irods-server' in resource_package_basename:
+            server_package = os.path.join(self.irods_packages_directory, resource_package_basename)
+            runtime_package = server_package.replace('irods-server', 'irods-runtime')
+            icommands_package = server_package.replace('irods-server', 'irods-icommands')
+            install_os_packages_from_files([runtime_package, icommands_package, server_package])
+        else: 
+            raise RuntimeError('unhandled package name')
 
     def start_server(self):
-        self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl start'], check_rc=True)
+        if get_irods_version() <= (4,1):
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/iRODS/irodsctl start'], check_rc=True)
+        else:
+            self.module.run_command(['sudo', 'su', '-', 'irods', '-c', '/var/lib/irods/irodsctl start'], check_rc=True)
 
 class CentOS6ResourceUpgrader(ResourceUpgrader):
     platform = 'Linux'

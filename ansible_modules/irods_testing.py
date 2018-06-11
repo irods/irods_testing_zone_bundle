@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 
-def run_tests(test_type, use_ssl, output_directory, federation_args):
+def run_tests(test_type, use_ssl, use_mungefs, output_directory, federation_args):
     if test_type != 'federation':
         create_irodsauthuser_account()
 
@@ -32,11 +32,12 @@ def run_tests(test_type, use_ssl, output_directory, federation_args):
             subprocess_get_output(['sudo', 'su', '-', 'irods', '-c', 'echo "" > /var/lib/irods/scripts/irods/database_connect.py'], check_rc=True)
 
     ssl_string = '--use_ssl' if use_ssl else ''
+    munge_string = '--use_mungefs' if use_mungefs else ''
     devtesty_string = '--run_devtesty' if not use_ssl and not test_type == 'federation' else ''
 
     test_runner_directory = get_test_runner_directory()
 
-    returncode = subprocess.call('sudo su - irods -c "cd {0}; python run_tests.py --xml_output {1} {2} {3} > {4} 2>&1"'.format(test_runner_directory, test_type_argument, ssl_string, devtesty_string, test_output_file), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    returncode = subprocess.call('sudo su - irods -c "cd {0}; python run_tests.py --xml_output {1} {2} {3} {4}> {5} 2>&1"'.format(test_runner_directory, test_type_argument, ssl_string, munge_string, devtesty_string, test_output_file), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if output_directory:
         output_directory_os_specific = os.path.join(output_directory, socket.gethostname())
         os.makedirs(output_directory_os_specific)
@@ -90,12 +91,13 @@ def main():
             test_type=dict(choices=['standalone_icat', 'topology_icat', 'topology_resource', 'federation'], type='str', required=True),
             output_directory=dict(type='str'),
             use_ssl=dict(type='bool', required=True),
+            use_mungefs=dict(type='bool', required=True),
             federation_args=dict(type='list', default=[]),
         ),
         supports_check_mode=False,
     )
 
-    test_returncode = run_tests(module.params['test_type'], module.params['use_ssl'], module.params['output_directory'], module.params['federation_args'])
+    test_returncode = run_tests(module.params['test_type'], module.params['use_ssl'], module.params['use_mungefs'], module.params['output_directory'], module.params['federation_args'])
 
     result = {}
     result['changed'] = True
