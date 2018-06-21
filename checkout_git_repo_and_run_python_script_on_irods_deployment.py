@@ -7,7 +7,6 @@ import deploy
 import destroy
 import library
 
-
 def list_to_dict(l):
     return {l[i]: l[i+1] for i in range(0, len(l), 2)}
 
@@ -38,7 +37,7 @@ def main():
 
     version_to_packages_map = list_to_dict(args.version_to_packages_map)
     passthru_args_dict = list_to_dict(args.passthrough_arguments)
-
+    
     mungefs_packages_dir = 'None'
     if '--mungefs_packages_dir' in passthru_args_dict:
         mungefs_packages_dir = passthru_args_dict['--mungefs_packages_dir']

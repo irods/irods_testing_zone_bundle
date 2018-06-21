@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import abc
 import json
 import hashlib
@@ -8,7 +10,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import logging
 
 
 class UnimplementedStrategy(object):
@@ -69,7 +70,6 @@ class GenericStrategy(object):
 
     def upgrade_irods_packages(self):
         database_plugin = self.get_database_plugin()
-
         icat_package_basename = filter(lambda x:'irods-icat' in x or 'irods-server' in x, os.listdir(self.irods_packages_directory))[0]
         if 'irods-icat' in icat_package_basename:
             icat_package = os.path.join(self.irods_packages_directory, icat_package_basename)
@@ -83,12 +83,12 @@ class GenericStrategy(object):
             raise RuntimeError('unhandled package name')
 
     def get_database_plugin(self):
-          def package_filter(package_name):
-              return bool(re.match('irods-database-plugin-' + self.icat_database_type + '[-_]', package_name))
-          database_plugin_basename = filter(package_filter, os.listdir(self.irods_packages_directory))[0]
-          database_plugin = os.path.join(self.irods_packages_directory, database_plugin_basename)
-          return database_plugin
-
+        def package_filter(package_name):
+            return bool(re.match('irods-database-plugin-' + self.icat_database_type + '[-_]', package_name))
+        database_plugin_basename = filter(package_filter, os.listdir(self.irods_packages_directory))[0]
+        database_plugin = os.path.join(self.irods_packages_directory, database_plugin_basename)
+        return database_plugin
+ 
     def upgrade_core_re(self, initial_version, final_version):
         if initial_version < (4,1) and final_version >= (4,1):
 

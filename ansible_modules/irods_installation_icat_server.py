@@ -67,14 +67,14 @@ class GenericStrategy(object):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
         self.install_pip()
-        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'pyOpenSSL', 'ndg-httpsclient', 'pyasn1'], check_rc=True)
-        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
-        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyOpenSSL', 'ndg-httpsclient', 'pyasn1'], check_rc=True)
+	self.module.run_command(['sudo', '-EH', 'pip', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
+        #self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
 
-    if self.mungefs_packages_root_directory != 'None':
-        mungefs_package_basename = filter(lambda x:'munge' in x, os.listdir(self.mungefs_packages_directory))[0]
-        mungefs_package = os.path.join(self.mungefs_packages_directory, mungefs_package_basename)
-        install_os_packages_from_files([mungefs_package])
+        if self.mungefs_packages_root_directory != 'None':
+            mungefs_package_basename = filter(lambda x:'munge' in x, os.listdir(self.mungefs_packages_directory))[0]
+            mungefs_package = os.path.join(self.mungefs_packages_directory, mungefs_package_basename)
+            install_os_packages_from_files([mungefs_package])
 
     def install_pip(self):
         local_pip_git_dir = os.path.expanduser('~/pip')

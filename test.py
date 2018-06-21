@@ -120,7 +120,7 @@ def get_first_zone_irods_version(zone_bundle):
     data = library.run_ansible(module_name='irods_version', complex_args={}, host_list=[icat_ip])
     return data['contacted'][icat_ip]['irods_version']
 
-def test_zone(zone, test_type, use_ssl, output_directory):
+def test_zone(zone, test_type, use_ssl, use_mungefs, output_directory):
     test_server_ip = get_test_server_ip(zone, test_type)
 
     complex_args = {
