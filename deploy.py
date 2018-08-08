@@ -3,7 +3,7 @@ import copy
 import json
 import logging
 import os
-
+import create_ssh_keys
 import configuration
 import destroy
 import library
@@ -16,6 +16,7 @@ def deploy(zone_bundle_input, deployment_name, version_to_packages_map, mungefs_
             save_zone_bundle(zone_bundle_output_file, zone_bundle_deployed)
         configure_zone_bundle_networking(zone_bundle_deployed)
         zone_bundle_deployed_updated = install_irods_on_zone_bundle(zone_bundle_deployed, version_to_packages_map, mungefs_packages_dir, install_dev_package)
+        create_ssh_keys.share_ssh_keys(zone_bundle_deployed_updated)
         if zone_bundle_output_file:
             save_zone_bundle(zone_bundle_output_file, zone_bundle_deployed_updated)
         configure_federation_on_zone_bundle(zone_bundle_deployed_updated)
@@ -80,6 +81,7 @@ def configure_zone_bundle_networking(zone_bundle):
 def configure_zone_networking(zone, servers):
     configure_zone_hosts_files(zone, servers)
     configure_zone_hostnames(zone)
+    configure_ssh_client(zone)
 
 def configure_zone_hosts_files(zone, servers):
     ip_address_to_hostnames_dict = {server['deployment_information']['ip_address']: [server['hostname']] for server in servers}
@@ -110,6 +112,15 @@ def configure_zone_hostnames(zone):
     for server in servers:
         server_ip = server['deployment_information']['ip_address']
         library.run_ansible(module_name='hostname', module_args='name={0}'.format(server['hostname']), host_list=[server_ip], sudo=True)
+
+def configure_ssh_client(zone):
+    servers = library.get_servers_from_zone(zone)
+    complex_args = {
+       'ssh_config_file':'/etc/ssh/ssh_config',
+    }
+    for server in servers:
+        server_ip = server['deployment_information']['ip_address']
+        library.run_ansible(module_name='ssh_config_file', complex_args=complex_args, host_list=[server_ip], sudo=True)
 
 def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map, mungefs_packages_dir, install_dev_package):
     proc_pool = library.RecursiveMultiprocessingPool(len(zone_bundle['zones']))

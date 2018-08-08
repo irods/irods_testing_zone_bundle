@@ -62,23 +62,29 @@ class GenericStrategy(object):
         self.post_install_configuration()
         self.apply_zone_bundle()
         self.install_testing_dependencies()
+        self.create_ssh_dir()
 
     def install_testing_dependencies(self):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
         self.install_pip()
         self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyOpenSSL', 'ndg-httpsclient', 'pyasn1'], check_rc=True)
-	self.module.run_command(['sudo', '-EH', 'pip', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
-        #self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'paramiko'], check_rc=True)
+        self.module.run_command(['sudo', 'python', '-m', 'easy_install', '--upgrade', 'pyOpenSSL'], check_rc=True)
 
         if self.mungefs_packages_root_directory != 'None':
             mungefs_package_basename = filter(lambda x:'munge' in x, os.listdir(self.mungefs_packages_directory))[0]
             mungefs_package = os.path.join(self.mungefs_packages_directory, mungefs_package_basename)
             install_os_packages_from_files([mungefs_package])
 
+    def create_ssh_dir(self):
+        self.module.run_command(['sudo', 'su', '-', 'irods', '-c', 'mkdir .ssh'], check_rc=True)
+
     def install_pip(self):
         local_pip_git_dir = os.path.expanduser('~/pip')
-        git_clone('https://github.com/pypa/pip.git', '10.0.0', local_pip_git_dir)
+        git_clone('https://github.com/pypa/pip.git', '10.0.1', local_pip_git_dir)
         self.module.run_command(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
 
     @property

@@ -87,8 +87,9 @@ class RedHatStrategy(GenericStrategy):
     def setup_build_environment(self):
         super(RedHatStrategy, self).setup_build_environment()
         if get_distribution_version_major() == '6':
-            os.environ['CC'] = '/opt/rh/devtoolset-2/root/usr/bin/gcc'
-            os.environ['CXX'] = '/opt/rh/devtoolset-2/root/usr/bin/g++'
+            os.environ['CC'] = '/opt/rh/devtoolset-6/root/usr/bin/gcc'
+            os.environ['CXX'] = '/opt/rh/devtoolset-6/root/usr/bin/g++'
+            os.environ['PATH'] = '/opt/rh/devtoolset-6/root/usr/bin' + os.pathsep + os.environ['PATH']
 
 class DebianStrategy(GenericStrategy):
     pass

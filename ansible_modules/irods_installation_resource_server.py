@@ -62,14 +62,20 @@ class GenericStrategy(object):
         self.install_resource()
         self.run_setup_script()
         self.install_testing_dependencies()
+        self.create_ssh_dir()
 
     def install_testing_dependencies(self):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
         self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
         self.module.run_command('sudo -E python get-pip.py', check_rc=True)
-        self.module.run_command(['sudo', '-E', 'pip2', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
-        #self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'pyzmq'], check_rc=True)
+        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'paramiko'], check_rc=True)
+        self.module.run_command(['sudo', 'python', '-m', 'easy_install', '--upgrade', 'pyOpenSSL'], check_rc=True)
+
+    def create_ssh_dir(self):
+        self.module.run_command(['sudo', 'su', '-', 'irods', '-c', 'mkdir .ssh'], check_rc=True)
 
     def install_resource(self):
         install_irods_repository()
