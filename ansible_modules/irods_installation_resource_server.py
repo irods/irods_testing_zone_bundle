@@ -67,15 +67,18 @@ class GenericStrategy(object):
     def install_testing_dependencies(self):
         if self.testing_dependencies:
             install_os_packages(self.testing_dependencies)
-        self.module.run_command('wget https://bootstrap.pypa.io/get-pip.py', check_rc=True)
-        self.module.run_command('sudo -E python get-pip.py', check_rc=True)
+        self.install_pip()
+        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyOpenSSL', 'ndg-httpsclient', 'pyasn1'], check_rc=True)
         self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
-        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'pyzmq'], check_rc=True)
-        self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'paramiko'], check_rc=True)
-        self.module.run_command(['sudo', 'python', '-m', 'easy_install', '--upgrade', 'pyOpenSSL'], check_rc=True)
+        #self.module.run_command(['sudo', '-EH', 'pip2', 'install', 'pyzmq'], check_rc=True)
 
     def create_ssh_dir(self):
         self.module.run_command(['sudo', 'su', '-', 'irods', '-c', 'mkdir .ssh'], check_rc=True)
+
+    def install_pip(self):
+        local_pip_git_dir = os.path.expanduser('~/pip')
+        git_clone('https://github.com/pypa/pip.git', '10.0.1', local_pip_git_dir)
+        self.module.run_command(['sudo', '-E', 'python', 'setup.py', 'install'], cwd=local_pip_git_dir, check_rc=True)
 
     def install_resource(self):
         install_irods_repository()
@@ -211,7 +214,16 @@ class RedHatStrategy(GenericStrategy):
         return super(RedHatStrategy, self).testing_dependencies + ['python-unittest2']
 
 class DebianStrategy(GenericStrategy):
-    pass
+    def install_pip(self):
+        install_os_packages(['python-setuptools'])
+        return super(DebianStrategy, self).install_pip()
+
+    def install_testing_dependencies(self):
+        super(DebianStrategy, self).install_testing_dependencies()
+        if get_distribution_version_major() == '16':
+            self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+            self.module.run_command(['sudo', '-EH', 'pip', 'install', 'paramiko'], check_rc=True)
+            self.module.run_command(['sudo', 'python', '-m', 'easy_install', '--upgrade', 'pyOpenSSL'], check_rc=True)
 
 class SuseStrategy(GenericStrategy):
     pass

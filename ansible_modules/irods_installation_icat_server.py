@@ -70,9 +70,7 @@ class GenericStrategy(object):
         self.install_pip()
         self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyOpenSSL', 'ndg-httpsclient', 'pyasn1'], check_rc=True)
         self.module.run_command(['sudo', '-EH', 'pip', 'install', 'unittest-xml-reporting==2.1.1'], check_rc=True)
-        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
-        self.module.run_command(['sudo', '-EH', 'pip', 'install', 'paramiko'], check_rc=True)
-        self.module.run_command(['sudo', 'python', '-m', 'easy_install', '--upgrade', 'pyOpenSSL'], check_rc=True)
+        #self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
 
         if self.mungefs_packages_root_directory != 'None':
             mungefs_package_basename = filter(lambda x:'munge' in x, os.listdir(self.mungefs_packages_directory))[0]
@@ -420,6 +418,13 @@ class DebianStrategy(GenericStrategy):
     @property
     def testing_dependencies(self):
         return super(DebianStrategy, self).testing_dependencies + ['python-dev', 'libffi-dev', 'libssl-dev']
+
+    def install_testing_dependencies(self):
+        super(DebianStrategy, self).install_testing_dependencies()
+        if get_distribution_version_major() == '16':
+            self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
+            self.module.run_command(['sudo', '-EH', 'pip', 'install', 'paramiko'], check_rc=True)
+            self.module.run_command(['sudo', 'python', '-m', 'easy_install', '--upgrade', 'pyOpenSSL'], check_rc=True)
 
     def install_pip(self):
         install_os_packages(['python-setuptools'])

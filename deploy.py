@@ -122,6 +122,19 @@ def configure_ssh_client(zone):
         server_ip = server['deployment_information']['ip_address']
         library.run_ansible(module_name='ssh_config_file', complex_args=complex_args, host_list=[server_ip], sudo=True)
 
+def configure_ssh_known_hosts(icat_server, resource_servers):
+    icat_server_ip = icat_server['deployment_information']['ip_address']
+    icat_hostname = icat_server['hostname']
+
+    complex_args = { 
+       'server_host_name':icat_hostname,
+       'server_ip_address':icat_server_ip,
+    }
+
+    for server in resource_servers:
+        server_ip = server['deployment_information']['ip_address']
+        library.run_ansible(module_name='ssh_known_hosts', complex_args=complex_args, host_list=[server_ip], sudo=True)
+
 def install_irods_on_zone_bundle(zone_bundle, version_to_packages_map, mungefs_packages_dir, install_dev_package):
     proc_pool = library.RecursiveMultiprocessingPool(len(zone_bundle['zones']))
     proc_pool_results = [proc_pool.apply_async(install_irods_on_zone,
@@ -136,6 +149,8 @@ def install_irods_on_zone(zone, version_to_packages_map, mungefs_packages_dir, i
     resource_servers = install_irods_on_zone_resource_servers(zone['resource_servers'], version_to_packages_map, install_dev_package)
     zone['icat_server'] = icat_server
     zone['resource_servers'] = resource_servers
+    if len(resource_servers) > 0:
+        configure_ssh_known_hosts(icat_server, resource_servers)
     return zone
 
 def install_irods_on_zone_icat_server(icat_server, version_to_packages_map, mungefs_packages_dir, install_dev_package):
