@@ -185,7 +185,7 @@ def install_irods_on_zone_resource_server(resource_server, version_to_packages_m
         'irods_packages_root_directory': version_to_packages_map[resource_server['version']['irods_version']],
         'install_dev_package': install_dev_package,
     }
-    data = library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=[resource_ip])
+    data = library.run_ansible(module_name='irods_installation_resource_server', complex_args=complex_args, host_list=[resource_ip], sudo=True)
 
     if resource_server['version']['irods_version'] == 'deployment-determined':
         resource_server['version']['irods_version'] = '.'.join(map(str, data['contacted'][resource_ip]['irods_version']))
