@@ -86,6 +86,7 @@ class GenericStrategy(object):
 class RedHatStrategy(GenericStrategy):
     def setup_build_environment(self):
         super(RedHatStrategy, self).setup_build_environment()
+        self.module.run_command(['sudo', 'systemctl', 'restart', 'autofs'], check_rc=True)
         if get_distribution_version_major() == '6':
             os.environ['CC'] = '/opt/rh/devtoolset-6/root/usr/bin/gcc'
             os.environ['CXX'] = '/opt/rh/devtoolset-6/root/usr/bin/g++'
