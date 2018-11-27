@@ -421,6 +421,8 @@ class DebianStrategy(GenericStrategy):
 
     def install_testing_dependencies(self):
         super(DebianStrategy, self).install_testing_dependencies()
+        if get_distribution_version_major() == '14':
+            self.module.run_command(['sudo', '-EH', 'pip', 'install', '--ignore-installed', 'urllib3[secure]', 'requests', 'cryptography==2.2.2'], check_rc=True)
         if get_distribution_version_major() == '16':
             self.module.run_command(['sudo', '-EH', 'pip', 'install', 'pyzmq'], check_rc=True)
             self.module.run_command(['sudo', '-EH', 'pip', 'install', 'paramiko'], check_rc=True)
