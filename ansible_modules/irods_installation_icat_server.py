@@ -3,6 +3,8 @@
 import abc
 import json
 import os
+import pwd
+import grp
 import re
 import tempfile
 import time
@@ -295,6 +297,21 @@ yes
         self.module.run_command(['sudo', 'su', '-c', '{0} 2>&1 | tee {1}; exit $PIPESTATUS'.format(get_setup_script_location(), output_log)], use_unsafe_shell=True, check_rc=True, data=setup_input)
 
     def post_install_configuration(self):
+        #univmss_interface = '/var/lib/irods/msiExecCmd_bin/univMSSInterface.sh'
+        #if os.path.exists(univmss_interface):
+        #    return
+        #else:
+        #    univmss_template = '/var/lib/irods/msiExecCmd_bin/univMSSInterface.sh.template'
+        #    if os.path.exists(univmss_template):
+        #        with open(univmss_template) as f:
+        #            univmss_contents = f.read().replace('template-', '')
+        #        with open(univmss_interface, 'w') as f:
+        #            f.write(univmss_contents)
+
+        #        uid = pwd.getpwnam("irods").pw_uid
+        #        gid = grp.getgrnam("irods").gr_gid
+        #        os.chown(univmss_contents, uid, gid)
+        #        os.chmod(univmss_interface, 0o544)
         pass
 
     def apply_zone_bundle(self):
@@ -512,6 +529,7 @@ class SuseStrategy(GenericStrategy):
             assert False, self.icat_database_type
 
     def post_install_configuration(self):
+        super(SuseStrategy, self).post_install_configuration()
         self.enable_pam()
 
     def enable_pam(self):
