@@ -74,11 +74,16 @@ class GenericStrategy(object):
         try:
             self.build_externals()
         finally:
-            os.makedirs(self.output_directory)
-            for f in itertools.chain(glob.glob(self.local_git_dir + '/*.rpm'),
-                                     glob.glob(self.local_git_dir + '/*.deb'),
-                                     glob.glob(self.local_git_dir + '/*.log'),):
-                shutil.copy2(f, self.output_directory)
+            if not os.path.exists(self.output_directory):
+                try:
+                    os.makedirs(self.output_directory)
+                    for f in itertools.chain(glob.glob(self.local_git_dir + '/*.rpm'),
+                                             glob.glob(self.local_git_dir + '/*.deb'),
+                                             glob.glob(self.local_git_dir + '/*.log'),):
+                        shutil.copy2(f, self.output_directory)
+                except OSError as e:
+                    if e.errno != errno.EEXIST:
+                        raise
 
     def build_externals(self):
         self.module.run_command(['make'], cwd=self.local_git_dir, check_rc=True)
